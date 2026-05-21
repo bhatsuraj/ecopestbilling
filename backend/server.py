@@ -851,7 +851,7 @@ async def send_bill_email(payload: SendBillEmailBody):
     in the share modal).
     """
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "465"))
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_user = os.environ.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASSWORD", "")
     from_name = os.environ.get("SMTP_FROM_NAME", "") or smtp_user
