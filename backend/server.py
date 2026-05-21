@@ -844,7 +844,6 @@ class SendBillEmailBody(BaseModel):
 
 @api_router.post("/bills/send-email")
 async def send_bill_email(payload: SendBillEmailBody):
-    
     """Send an invoice email with the PDF attached via Gmail SMTP.
 
     Reads SMTP credentials from environment variables. Returns 500 with a
