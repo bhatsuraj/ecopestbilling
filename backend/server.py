@@ -844,6 +844,7 @@ class SendBillEmailBody(BaseModel):
 
 @api_router.post("/bills/send-email")
 async def send_bill_email(payload: SendBillEmailBody):
+    
     """Send an invoice email with the PDF attached via Gmail SMTP.
 
     Reads SMTP credentials from environment variables. Returns 500 with a
@@ -851,7 +852,7 @@ async def send_bill_email(payload: SendBillEmailBody):
     in the share modal).
     """
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_port = int(os.environ.get("SMTP_PORT", "465"))
     smtp_user = os.environ.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASSWORD", "")
     from_name = os.environ.get("SMTP_FROM_NAME", "") or smtp_user
