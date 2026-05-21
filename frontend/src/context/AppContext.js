@@ -1,0 +1,719 @@
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import axios from 'axios';
+import { toast } from 'sonner';
+
+// ---------------------------------------------------------------------------
+// API client — single base URL pulled from .env. All persistence flows through
+// the FastAPI backend → MongoDB.  React state mirrors the backend so existing
+// synchronous getX() / saveX() signatures continue to work for components.
+// ---------------------------------------------------------------------------
+const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const api = axios.create({ baseURL: API_BASE, timeout: 30000 });
+
+export const DEFAULT_COMPANY = {
+  name: 'ECO PEST SOLUTIONS',
+  gstNumber: '29DYSPM4565D2ZS',
+  sacCode: '998531',
+  cgst: 9,
+  sgst: 9,
+  address: 'No. 281, Ground floor, 4th cross 3rd main, B-Block,\nVijayanandanagar, Nandini Layout Post, Bangalore - 560096',
+  phone1: '9731066971',
+  phone2: '9481566971',
+  phone3: '9663996594',
+  email: 'mge.ecopestsolutions@gmail.com',
+  website: 'www.ecopestsolutions.org',
+  bankHolder: 'ECO PEST SOLUTIONS',
+  bankName: '',
+  bankAccount: '',
+  ifscCode: '',
+  micrCode: '',
+  logoUrl: 'https://customer-assets.emergentagent.com/job_pest-bill-pro/artifacts/6rlfc41s_Eco_logo.png',
+  signUrl: '',   // Authorised signature image (shown above the seal on invoice)
+  sealUrl: '',   // Company seal / stamp image (shown below the signature)
+};
+
+// Location options for the description dropdown — used in BillGenerate
+// (default list; the live list can be extended/edited by the user and is
+// persisted under company.locations so it syncs across devices).
+export const LOCATION_OPTIONS = [
+  'Apartment', 'Home', 'Industry', 'Factory', 'College', 'Office', 'Hotel', 'Restaurant', 'Other',
+];
+
+// Default services with {LOCATION} placeholder support
+const DEFAULT_SERVICES = [
+  { id: '1', name: 'Fumigation Treatment for Wooden Pallets', description: 'Fumigation Treatment for Wooden Pallets carried out at your {LOCATION} premises.', descriptionTemplate: 'Fumigation Treatment for Wooden Pallets carried out at your {LOCATION} premises.' },
+  { id: '2', name: 'General Disinfestation Service for Bedbug Control', description: 'General Disinfestation Service carried out at your entire {LOCATION} premises for Bedbug control.', descriptionTemplate: 'General Disinfestation Service carried out at your entire {LOCATION} premises for Bedbug control.' },
+  { id: '3', name: 'Smoke Fumigation Treatment for Cockroaches Control', description: 'Smoke Fumigation Treatment carried out at your entire {LOCATION} premises for Cockroaches Control.', descriptionTemplate: 'Smoke Fumigation Treatment carried out at your entire {LOCATION} premises for Cockroaches Control.' },
+  { id: '4', name: 'General Disinfestation Service and Herbal Jell Treatment for Cockroaches', description: 'General disinfestation service and Herbal Jell Treatment carried out at your entire {LOCATION} premises for Cockroaches Control.', descriptionTemplate: 'General disinfestation service and Herbal Jell Treatment carried out at your entire {LOCATION} premises for Cockroaches Control.' },
+  { id: '5', name: 'General Disinfestation Service for Mosquitoes, Flies and Rodent Control', description: 'General disinfestation service carried out at your {LOCATION} premises for Mosquitoes, Flies and Rodent Control service.', descriptionTemplate: 'General disinfestation service carried out at your {LOCATION} premises for Mosquitoes, Flies and Rodent Control service.' },
+  { id: '6', name: 'General Disinfestation Service and Rodent Control Service', description: 'General disinfestation service and Rodent Control Service carried out at your entire {LOCATION} premises.', descriptionTemplate: 'General disinfestation service and Rodent Control Service carried out at your entire {LOCATION} premises.' },
+  { id: '7', name: 'General Disinfestation Service for Mosquitoes and Cockroaches', description: 'General disinfestation service carried out at your {LOCATION} premises for Mosquitoes and Cockroaches.', descriptionTemplate: 'General disinfestation service carried out at your {LOCATION} premises for Mosquitoes and Cockroaches.' },
+  { id: '8', name: 'Herbal Jell Treatment', description: 'Herbal Jell Treatment, Anti-Termite Treatment & Rat Glue Board for Rat Control carried out at your {LOCATION} premises.', descriptionTemplate: 'Herbal Jell Treatment, Anti-Termite Treatment & Rat Glue Board for Rat Control carried out at your {LOCATION} premises.' },
+  { id: '9', name: 'General Disinfestation Service for Bedbug, Flies and Mosquitoes', description: 'General disinfestation service carried out at your entire {LOCATION} premises for Bedbug control, Flies Control and Mosquitoes.', descriptionTemplate: 'General disinfestation service carried out at your entire {LOCATION} premises for Bedbug control, Flies Control and Mosquitoes.' },
+  { id: '10', name: 'Rodent Control Service', description: 'Rodent Control Service carried out at your {LOCATION} Premises by Using Spot Traps and Glue Boards.', descriptionTemplate: 'Rodent Control Service carried out at your {LOCATION} Premises by Using Spot Traps and Glue Boards.' },
+  { id: '11', name: 'General Disinfestation Service for Mosquitoes, Cockroaches, Ants and Rodent', description: 'General disinfestation service carried out at your {LOCATION} premises for Mosquitoes, Cockroaches, Ants Control and Rodent Control service.', descriptionTemplate: 'General disinfestation service carried out at your {LOCATION} premises for Mosquitoes, Cockroaches, Ants Control and Rodent Control service.' },
+  { id: '12', name: 'Pest Control (Post-construction)', description: 'Anti-Cockroach Gel Treatment, Bed Bug Control, General Disinfection Treatment, Termite Control Treatment carried out at your {LOCATION} premises.', descriptionTemplate: 'Anti-Cockroach Gel Treatment, Bed Bug Control, General Disinfection Treatment, Termite Control Treatment carried out at your {LOCATION} premises.' },
+  { id: '13', name: 'Snake Control Service', description: 'Snake Control Service carried out at your {LOCATION} premises.', descriptionTemplate: 'Snake Control Service carried out at your {LOCATION} premises.' },
+  { id: '14', name: 'Honey Bee Hive Removed', description: 'Honey Bee Hive Removed safely from your {LOCATION} premises.', descriptionTemplate: 'Honey Bee Hive Removed safely from your {LOCATION} premises.' },
+  { id: '15', name: 'Anti-Termite Treatment By Drilling And Chemical Filling', description: 'Anti-Termite Treatment by Drilling and Chemical Filling carried out at your {LOCATION} premises.', descriptionTemplate: 'Anti-Termite Treatment by Drilling and Chemical Filling carried out at your {LOCATION} premises.' },
+  { id: '16', name: 'General Disinfestation Service for Ants Control', description: 'General Disinfestation service carried out for Ants Control at your {LOCATION} premises.', descriptionTemplate: 'General Disinfestation service carried out for Ants Control at your {LOCATION} premises.' },
+  { id: '17', name: 'Fogging Treatment', description: 'Fogging Treatment carried out at your {LOCATION} premises for pest control.', descriptionTemplate: 'Fogging Treatment carried out at your {LOCATION} premises for pest control.' },
+  { id: '18', name: 'Fogging Machine Issued', description: 'Fogging Machine Issued for pest control use.', descriptionTemplate: 'Fogging Machine Issued for pest control use.' },
+  { id: '19', name: 'Fogging Gas Can Issued', description: 'Fogging Gas Can Issued for fogging treatment.', descriptionTemplate: 'Fogging Gas Can Issued for fogging treatment.' },
+  { id: '20', name: 'Fogging Chemical Issued', description: 'Fogging Chemical Issued for treatment.', descriptionTemplate: 'Fogging Chemical Issued for treatment.' },
+  { id: '21', name: 'Cockroaches Chemical (Propoxer 20% EC)', description: 'Cockroaches Chemical (Propoxer 20% EC) supplied.', descriptionTemplate: 'Cockroaches Chemical (Propoxer 20% EC) supplied.' },
+  { id: '22', name: 'Rat Traps', description: 'Rat Traps supplied for rodent control.', descriptionTemplate: 'Rat Traps supplied for rodent control.' },
+];
+
+const AppContext = createContext(null);
+
+// In-app toast helper — replaces browser-level Notification API so users get a
+// consistent visual cue inside the dashboard rather than an OS-level popup.
+const showInAppNotif = (notif) => {
+  const title = notif?.title || 'Notification';
+  const message = notif?.message || '';
+  const type = notif?.type || 'info';
+  const opts = message ? { description: message } : undefined;
+  if (type === 'bill_approved') return toast.success(title, opts);
+  if (type === 'bill_rejected') return toast.error(title, opts);
+  if (type === 'verification_request') return toast.warning(title, opts);
+  return toast.info(title, opts);
+};
+
+// Deep equality good enough for our diffing — JSON-stringify is fine since
+// our payloads are pure JSON (no Dates / Maps / Sets / functions).
+const sameDoc = (a, b) => {
+  try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; }
+};
+
+export const AppProvider = ({ children }) => {
+  // ── React state mirrors MongoDB ──────────────────────────────────────
+  const [users, setUsers] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [bills, setBills] = useState([]);
+  const [services, setServices] = useState(DEFAULT_SERVICES);
+  const [companyProfile, setCompanyProfile] = useState(DEFAULT_COMPANY);
+  const [notificationsByUser, setNotificationsByUser] = useState({});
+  const [loaded, setLoaded] = useState(false);
+
+  // Refs hold the *latest* state synchronously so getX() never returns stale
+  // data (React state updates are async — refs let us read immediately after
+  // a setX call, which several callers rely on).
+  const usersRef     = useRef([]);
+  const customersRef = useRef([]);
+  const billsRef     = useRef([]);
+  const servicesRef  = useRef(DEFAULT_SERVICES);
+  const companyRef   = useRef(DEFAULT_COMPANY);
+  const notifsRef    = useRef({});
+
+  useEffect(() => { usersRef.current = users; }, [users]);
+  useEffect(() => { customersRef.current = customers; }, [customers]);
+  useEffect(() => { billsRef.current = bills; }, [bills]);
+  useEffect(() => { servicesRef.current = services; }, [services]);
+  useEffect(() => { companyRef.current = companyProfile; }, [companyProfile]);
+  useEffect(() => { notificationsByUser; notifsRef.current = notificationsByUser; }, [notificationsByUser]);
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('eco_current_user')); } catch { return null; }
+  });
+  const [language, setLanguage] = useState(() => {
+    const saved = localStorage.getItem('eco_language');
+    // Only English is supported now; coerce legacy 'hi' / 'kn' values to 'en'.
+    return saved === 'en' ? saved : 'en';
+  });
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('eco_dark') === 'true');
+  const [tick, setTick] = useState(0);
+  const bumpTick = useCallback(() => setTick(t => t + 1), []);
+
+  // ── Initial load: pull everything from the API ────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        // Ensure superior admin exists in MongoDB (idempotent on backend)
+        await api.post('/seed').catch(() => {});
+
+        const [u, c, b, s, comp] = await Promise.all([
+          api.get('/users').then(r => r.data).catch(() => []),
+          api.get('/customers').then(r => r.data).catch(() => []),
+          api.get('/bills').then(r => r.data).catch(() => []),
+          api.get('/services').then(r => r.data).catch(() => []),
+          api.get('/company').then(r => r.data).catch(() => null),
+        ]);
+        if (cancelled) return;
+
+        const usersData     = Array.isArray(u) ? u : [];
+        const customersData = Array.isArray(c) ? c : [];
+        const billsData     = Array.isArray(b) ? b : [];
+
+        // Refs MUST be set synchronously here, before React commits the render
+        // triggered by setLoaded(true). Otherwise getBills()/getCustomers()/...
+        // (which read from refs) return [] on the first render after refresh
+        // and pages like Bill Summary appear blank until the user navigates.
+        usersRef.current     = usersData;
+        customersRef.current = customersData;
+        billsRef.current     = billsData;
+
+        setUsers(usersData);
+        setCustomers(customersData);
+        setBills(billsData);
+
+        // Seed default services on first run
+        if (Array.isArray(s) && s.length === 0) {
+          await api.put('/services', DEFAULT_SERVICES).catch(() => {});
+          servicesRef.current = DEFAULT_SERVICES;
+          setServices(DEFAULT_SERVICES);
+        } else if (Array.isArray(s)) {
+          servicesRef.current = s;
+          setServices(s);
+        }
+
+        if (comp && comp.name) {
+          // Merge with DEFAULT_COMPANY so legacy phone1/phone2/phone3 fields used
+          // by the invoice template remain populated even if backend stores them flat.
+          const merged = { ...DEFAULT_COMPANY, ...comp };
+          companyRef.current = merged;
+          setCompanyProfile(merged);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoaded(true);
+          // Force a re-render so any consumer reading from refs picks up the
+          // newly hydrated data on the very first paint after `loaded` flips.
+          setTick(t => t + 1);
+        }
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load notifications for current user when they log in
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    api.get(`/notifications/${currentUser.id}`)
+      .then(r => {
+        if (cancelled) return;
+        setNotificationsByUser(prev => ({ ...prev, [String(currentUser.id)]: r.data || [] }));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentUser?.id]);
+
+  // ── Live sync: keep every tab / device in lock-step with MongoDB ───────
+  // Strategy:
+  //   1. Polling every 5 s (paused while the tab is hidden) — covers other
+  //      devices / other users.
+  //   2. Re-fetch immediately on tab focus / visibility-change — covers the
+  //      "switched back to the tab" case so users see fresh data instantly.
+  //   3. BroadcastChannel within the same browser — any tab that writes
+  //      pushes a "dirty" ping so other tabs refetch in the same event loop.
+  //
+  // We diff against the previous state via JSON.stringify and only setState
+  // when something actually changed, so renders stay cheap.
+  const refreshAll = useCallback(async () => {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    try {
+      const reqs = [
+        api.get('/users').then(r => r.data).catch(() => null),
+        api.get('/customers').then(r => r.data).catch(() => null),
+        api.get('/bills').then(r => r.data).catch(() => null),
+        api.get('/services').then(r => r.data).catch(() => null),
+        api.get('/company').then(r => r.data).catch(() => null),
+      ];
+      if (currentUser?.id) {
+        reqs.push(api.get(`/notifications/${currentUser.id}`).then(r => r.data).catch(() => null));
+      }
+      const [u, c, b, s, comp, n] = await Promise.all(reqs);
+
+      if (Array.isArray(u) && !sameDoc(u, usersRef.current)) setUsers(u);
+      if (Array.isArray(c) && !sameDoc(c, customersRef.current)) setCustomers(c);
+      if (Array.isArray(b) && !sameDoc(b, billsRef.current)) setBills(b);
+      if (Array.isArray(s) && !sameDoc(s, servicesRef.current)) setServices(s);
+      if (comp && comp.name) {
+        const merged = { ...DEFAULT_COMPANY, ...comp };
+        if (!sameDoc(merged, companyRef.current)) setCompanyProfile(merged);
+      }
+      if (Array.isArray(n) && currentUser?.id) {
+        const uid = String(currentUser.id);
+        const prev = notifsRef.current[uid] || [];
+        if (!sameDoc(n, prev)) {
+          setNotificationsByUser(prevState => ({ ...prevState, [uid]: n }));
+        }
+      }
+    } catch (_) { /* silent — next tick will retry */ }
+  }, [currentUser?.id]);
+
+  // BroadcastChannel: instant nudge between tabs of the same browser.
+  const bcRef = useRef(null);
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const ch = new BroadcastChannel('eco-billing-sync');
+    bcRef.current = ch;
+    ch.onmessage = (ev) => {
+      if (ev?.data?.type === 'mutate') refreshAll();
+    };
+    return () => { try { ch.close(); } catch (_) { /* ignore */ } bcRef.current = null; };
+  }, [refreshAll]);
+
+  // Polling + focus/visibility listeners — only active once initial load
+  // completes, so the user isn't fighting two requests on startup.
+  useEffect(() => {
+    if (!loaded) return undefined;
+    let interval = setInterval(refreshAll, 5000);
+    const onFocus = () => refreshAll();
+    const onVisible = () => { if (!document.hidden) refreshAll(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [loaded, refreshAll]);
+
+  // Helper used inside every save* function so other tabs refetch immediately.
+  const broadcastMutation = useCallback((scope = 'any') => {
+    try { bcRef.current?.postMessage({ type: 'mutate', scope, at: Date.now() }); } catch (_) { /* ignore */ }
+  }, []);
+
+  // ── Synchronous getters (read from refs → always up-to-date) ─────────
+  const getUsers     = () => usersRef.current;
+  const getCustomers = () => customersRef.current;
+  const getBills     = () => billsRef.current;
+  const getServices  = () => servicesRef.current;
+  const getCompanyProfile = () => ({ ...DEFAULT_COMPANY, ...companyRef.current });
+
+  // ── Diff-based save helpers ──────────────────────────────────────────
+  const syncCollection = async ({ oldArr, newArr, key, postPath, putPath, delPath, mapToCreate }) => {
+    const oldByKey = new Map(oldArr.map(item => [String(item[key]), item]));
+    const newByKey = new Map(newArr.map(item => [String(item[key]), item]));
+
+    const tasks = [];
+
+    // Deletes
+    for (const [k, oldItem] of oldByKey) {
+      if (!newByKey.has(k)) {
+        tasks.push(api.delete(delPath(oldItem)).catch(err => console.warn('delete failed', err)));
+      }
+    }
+    // Inserts + updates
+    for (const [k, newItem] of newByKey) {
+      const oldItem = oldByKey.get(k);
+      if (!oldItem) {
+        const payload = mapToCreate ? mapToCreate(newItem) : newItem;
+        tasks.push(api.post(postPath, payload).catch(err => console.warn('create failed', err)));
+      } else if (!sameDoc(oldItem, newItem)) {
+        const payload = mapToCreate ? mapToCreate(newItem) : newItem;
+        tasks.push(api.put(putPath(newItem), payload).catch(err => console.warn('update failed', err)));
+      }
+    }
+    await Promise.all(tasks);
+  };
+
+  const saveUsers = (newArr) => {
+    const oldArr = usersRef.current;
+    // Defense-in-depth: ensure ids are strings (Date.now() returns numbers).
+    const normalized = newArr.map(u => ({ ...u, id: String(u.id ?? '') }));
+    setUsers(normalized); usersRef.current = normalized; bumpTick();
+    syncCollection({
+      oldArr, newArr: normalized, key: 'id',
+      postPath: '/users',
+      putPath: (it) => `/users/${encodeURIComponent(it.id)}`,
+      delPath: (it) => `/users/${encodeURIComponent(it.id)}`,
+    });
+    broadcastMutation('users');
+  };
+
+  const saveCustomers = (newArr) => {
+    const oldArr = customersRef.current;
+    const normalized = newArr.map(c => ({ ...c, id: String(c.id ?? '') }));
+    setCustomers(normalized); customersRef.current = normalized; bumpTick();
+    syncCollection({
+      oldArr, newArr: normalized, key: 'id',
+      postPath: '/customers',
+      putPath: (it) => `/customers/${encodeURIComponent(it.id)}`,
+      delPath: (it) => `/customers/${encodeURIComponent(it.id)}`,
+    });
+    broadcastMutation('customers');
+  };
+
+  const saveBills = (newArr) => {
+    const oldArr = billsRef.current;
+    const normalized = newArr.map(b => ({ ...b, id: b.id != null ? String(b.id) : undefined }));
+    setBills(normalized); billsRef.current = normalized; bumpTick();
+    // Bills key by billNumber (frontend invariant) — the backend supports
+    // upsert / delete by billNumber for exactly this flow.
+    syncCollection({
+      oldArr, newArr: normalized, key: 'billNumber',
+      postPath: '/bills',
+      putPath: (it) => `/bills/number/${encodeURIComponent(it.billNumber)}`,
+      delPath: (it) => `/bills/number/${encodeURIComponent(it.billNumber)}`,
+    });
+    broadcastMutation('bills');
+  };
+
+  const saveServices = (newArr) => {
+    setServices(newArr); servicesRef.current = newArr; bumpTick();
+    api.put('/services', newArr).catch(err => console.warn('services save failed', err));
+    broadcastMutation('services');
+  };
+
+  const saveCompanyProfile = (profile) => {
+    const cleaned = { ...profile };
+    setCompanyProfile({ ...DEFAULT_COMPANY, ...cleaned });
+    companyRef.current = { ...DEFAULT_COMPANY, ...cleaned };
+    bumpTick();
+    api.put('/company', cleaned).catch(err => console.warn('company save failed', err));
+    broadcastMutation('company');
+  };
+
+  // ── Bill locations — stored alongside the company profile so they
+  // persist & sync via the same /api/company endpoint and live-sync layer.
+  const getLocations = () => {
+    const list = companyRef.current?.locations;
+    return Array.isArray(list) && list.length ? list : LOCATION_OPTIONS;
+  };
+  const saveLocations = (newList) => {
+    // De-duplicate (case-insensitive) and drop empties / whitespace.
+    const seen = new Set();
+    const cleaned = [];
+    for (const raw of newList || []) {
+      const v = String(raw || '').trim();
+      if (!v) continue;
+      const key = v.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cleaned.push(v);
+    }
+    const next = { ...(companyRef.current || {}), locations: cleaned };
+    saveCompanyProfile(next);
+  };
+
+  // Stub for legacy verification-requests collection (no component uses it now)
+  const getRequests = () => [];
+  const saveRequests = () => {};
+
+  // ── Notifications (per-user, persisted to MongoDB) ────────────────────
+  const getNotifications = (userId) => {
+    if (!userId) return [];
+    const list = notifsRef.current[String(userId)] || [];
+    return list.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  };
+
+  const getUnreadCount = (userId) => getNotifications(userId).filter(n => !n.read).length;
+
+  const addNotificationFor = (userIds, notif) => {
+    const ids = (Array.isArray(userIds) ? userIds : [userIds]).map(String).filter(Boolean);
+    if (!ids.length) return;
+    const ts = new Date().toISOString();
+    const baseId = `n_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const updates = { ...notifsRef.current };
+    const apiCalls = [];
+    ids.forEach(uid => {
+      const id = `${baseId}_${uid}`;
+      const item = {
+        id,
+        userId: uid,
+        type: notif.type || 'info',
+        title: notif.title || 'Notification',
+        message: notif.message || '',
+        billNumber: notif.billNumber || '',
+        link: notif.link || '',
+        read: false,
+        createdAt: ts,
+      };
+      const list = updates[uid] || [];
+      updates[uid] = [item, ...list].slice(0, 100);
+      apiCalls.push(api.post('/notifications', item).catch(err => console.warn('notif failed', err)));
+    });
+    notifsRef.current = updates;
+    setNotificationsByUser(updates);
+    Promise.all(apiCalls);
+    broadcastMutation('notifications');
+
+    if (currentUser && ids.includes(String(currentUser.id))) {
+      showInAppNotif(notif);
+    }
+  };
+
+  const markAllRead = (userId) => {
+    const uid = String(userId);
+    const list = notifsRef.current[uid] || [];
+    const updated = list.map(n => ({ ...n, read: true }));
+    const next = { ...notifsRef.current, [uid]: updated };
+    notifsRef.current = next;
+    setNotificationsByUser(next);
+    api.put(`/notifications/user/${uid}/read-all`).catch(() => {});
+    broadcastMutation('notifications');
+  };
+
+  const clearNotifications = (userId) => {
+    const uid = String(userId);
+    const next = { ...notifsRef.current };
+    delete next[uid];
+    notifsRef.current = next;
+    setNotificationsByUser(next);
+    api.delete(`/notifications/${uid}`).catch(() => {});
+    broadcastMutation('notifications');
+  };
+
+  // ── Auth (session-only via localStorage; user records live in MongoDB) ──
+  const login  = (user) => {
+    setCurrentUser(user);
+    localStorage.setItem('eco_current_user', JSON.stringify(user));
+  };
+  const logout = () => { setCurrentUser(null); localStorage.removeItem('eco_current_user'); };
+
+  const updateCurrentUser = (updates) => {
+    const updated = { ...currentUser, ...updates };
+    setCurrentUser(updated);
+    localStorage.setItem('eco_current_user', JSON.stringify(updated));
+    const list = usersRef.current;
+    saveUsers(list.map(u => String(u.id) === String(updated.id) ? { ...u, ...updates } : u));
+  };
+
+  // ── Role helpers ──────────────────────────────────────────────────────
+  const isSuperior  = () => currentUser?.role === 'superior';
+  const isAssistant = () => currentUser?.role === 'assistant';
+  const isFirstUser = () => usersRef.current.length === 0;
+  const getAssistants = () => usersRef.current.filter(u => u.role === 'assistant');
+
+  // ── Bill numbering — EPS000001 format ────────────────────────────────
+  const generateBillNumber = () => {
+    const nums = billsRef.current
+      .map(b => parseInt(String(b.billNumber || '').replace(/\D/g, ''), 10))
+      .filter(n => !isNaN(n));
+    const next = nums.length ? Math.max(...nums) + 1 : 1;
+    return `EPS${String(next).padStart(6, '0')}`;
+  };
+
+  const getBillByNumber = (billNumber) =>
+    billsRef.current.find(b => b.billNumber === billNumber) || null;
+
+  // ── Verification helpers ──────────────────────────────────────────────
+  const getVerificationRequestsFor = (userId) => {
+    if (!userId) return [];
+    const uid = String(userId);
+    return billsRef.current.filter(b => (b.verificationRequestedTo || []).map(String).includes(uid));
+  };
+  const getVerificationRequestsSentBy = (userId) => {
+    if (!userId) return [];
+    return billsRef.current.filter(b => String(b.verificationRequestedById) === String(userId));
+  };
+  const getPendingVerificationsCount = (userId) => {
+    if (!userId) return 0;
+    const uid = String(userId);
+    return billsRef.current.filter(b => {
+      const status = b.status || 'pending';
+      if (status !== 'pending') return false;
+      const requestedTo = (b.verificationRequestedTo || []).map(String);
+      const requestedBy = String(b.verificationRequestedById || '');
+      return requestedTo.includes(uid) || requestedBy === uid;
+    }).length;
+  };
+
+  // ── Approval helpers (with notifications) ───────────────────────────
+  const getPendingBillsCount = () => billsRef.current.filter(b => b.status === 'pending').length;
+
+  const approveBill = (billNumber, opts = {}) => {
+    const list = billsRef.current;
+    const target = list.find(b => b.billNumber === billNumber);
+    const selfApproved = !!opts.selfApproved;
+    saveBills(list.map(b => b.billNumber === billNumber
+      ? {
+          ...b,
+          status: 'approved',
+          approvedBy: currentUser?.name,
+          approvedById: currentUser?.id,
+          approvedByRole: currentUser?.role || '',
+          approvedAt: new Date().toISOString(),
+          selfApproved,
+          selfApprovedAt: selfApproved ? new Date().toISOString() : b.selfApprovedAt,
+        }
+      : b
+    ));
+    // Notify the bill sender — prefer createdById, fall back to the user who
+    // raised the verification request, then to legacy `createdBy` lookup by name.
+    const senderId = target?.createdById
+      || target?.verificationRequestedById
+      || usersRef.current.find(u => u.name === target?.createdBy)?.id;
+    // Skip self-notification when the approver is the same person as the sender.
+    if (senderId && String(senderId) !== String(currentUser?.id)) {
+      addNotificationFor([senderId], {
+        type: 'bill_approved',
+        title: `Bill ${billNumber} approved`,
+        message: `${currentUser?.name || 'Assistant'} approved invoice ${billNumber}.`,
+        billNumber,
+        link: '/dashboard/bill-summary',
+      });
+    }
+  };
+
+  const rejectBill = (billNumber, reason = '') => {
+    const list = billsRef.current;
+    const target = list.find(b => b.billNumber === billNumber);
+    saveBills(list.map(b => b.billNumber === billNumber
+      ? { ...b, status: 'rejected', rejectedBy: currentUser?.name, rejectedById: currentUser?.id, rejectedAt: new Date().toISOString(), rejectReason: reason }
+      : b
+    ));
+    const senderId = target?.createdById
+      || target?.verificationRequestedById
+      || usersRef.current.find(u => u.name === target?.createdBy)?.id;
+    if (senderId) {
+      addNotificationFor([senderId], {
+        type: 'bill_rejected',
+        title: `Bill ${billNumber} rejected`,
+        message: `${currentUser?.name || 'Assistant'} rejected invoice ${billNumber}.${reason ? ' Reason: ' + reason : ''}`,
+        billNumber,
+        link: '/dashboard/bill-summary',
+      });
+    }
+  };
+
+  const cancelBill = (billNumber, reason = '') => {
+    const list = billsRef.current;
+    const target = list.find(b => b.billNumber === billNumber);
+    saveBills(list.map(b => b.billNumber === billNumber
+      ? {
+          ...b,
+          status: 'cancelled',
+          cancelledBy: currentUser?.name,
+          cancelledById: currentUser?.id,
+          cancelledAt: new Date().toISOString(),
+          cancelReason: reason,
+        }
+      : b
+    ));
+    // Notify the original creator (if known and different from the canceller)
+    const senderId = target?.createdById
+      || target?.verificationRequestedById
+      || usersRef.current.find(u => u.name === target?.createdBy)?.id;
+    if (senderId && String(senderId) !== String(currentUser?.id)) {
+      addNotificationFor([senderId], {
+        type: 'bill_cancelled',
+        title: `Bill ${billNumber} cancelled`,
+        message: `${currentUser?.name || 'A user'} cancelled invoice ${billNumber}.${reason ? ' Reason: ' + reason : ''}`,
+        billNumber,
+        link: '/dashboard/bill-summary',
+      });
+    }
+  };
+
+  // ── Send tracking (WhatsApp / Email) ──────────────────────────────────
+  // Records that a bill was dispatched to the customer via the given channel.
+  // The Bill Summary uses this to switch the "Send" button label to "Resend".
+  const markBillSent = (billNumber, channel) => {
+    if (!['whatsapp', 'email'].includes(channel)) return;
+    const list = billsRef.current;
+    saveBills(list.map(b => {
+      if (b.billNumber !== billNumber) return b;
+      const sentChannels = Array.from(new Set([...(b.sentChannels || []), channel]));
+      return {
+        ...b,
+        sentChannels,
+        lastSentChannel: channel,
+        lastSentAt: new Date().toISOString(),
+        lastSentBy: currentUser?.name || '',
+        lastSentById: currentUser?.id || null,
+      };
+    }));
+  };
+
+  const requestVerification = (billNumber, assistantUserIds, reason = '') => {
+    const list = billsRef.current;
+    const target = list.find(b => b.billNumber === billNumber);
+    if (!target) return null;
+    const ids = (assistantUserIds || []).map(String);
+    const updated = {
+      ...target,
+      verificationRequestedTo: ids,
+      verificationRequestedAt: new Date().toISOString(),
+      verificationRequestedBy: currentUser?.name || '',
+      verificationRequestedById: currentUser?.id || null,
+      verificationReason: (reason || '').trim(),
+    };
+    saveBills(list.map(b => b.billNumber === billNumber ? updated : b));
+    const reasonLine = updated.verificationReason ? ` Reason: "${updated.verificationReason}".` : '';
+    addNotificationFor(ids, {
+      type: 'verification_request',
+      title: `Verification requested for ${billNumber}`,
+      message: `${currentUser?.name || 'Sender'} has requested your verification on invoice ${billNumber} (₹${(updated.grandTotal || updated.total || 0).toLocaleString('en-IN')}).${reasonLine}`,
+      billNumber,
+      link: '/dashboard/verification-requests',
+    });
+    return updated;
+  };
+
+  const notifyEditAfterVerification = (bill) => {
+    if (!bill) return;
+    const currentId = currentUser?.id ? String(currentUser.id) : '';
+    const toIds     = (bill.verificationRequestedTo || []).map(String);
+    const senderId  = bill.verificationRequestedById ? String(bill.verificationRequestedById) : '';
+    const recipients = Array.from(new Set([...toIds, senderId].filter(Boolean)))
+      .filter(id => id !== currentId);
+    if (recipients.length === 0) return;
+    addNotificationFor(recipients, {
+      type: 'edit_after_verification',
+      title: `Bill ${bill.billNumber} updated`,
+      message: `${currentUser?.name || 'A user'} edited ${bill.billNumber}. Please review the updated invoice.`,
+      billNumber: bill.billNumber,
+      link: '/dashboard/verification-requests',
+    });
+  };
+
+  const notifyNewBillPending = (bill) => {
+    const assistantIds = getAssistants().map(a => a.id);
+    if (assistantIds.length === 0) return;
+    addNotificationFor(assistantIds, {
+      type: 'new_bill_pending',
+      title: `New bill awaiting approval`,
+      message: `${currentUser?.name || 'Superior'} created ${bill.billNumber} for ${bill.customerName}. Awaiting approval.`,
+      billNumber: bill.billNumber,
+      link: '/dashboard/bill-approvals',
+    });
+  };
+
+  // ── Effects ───────────────────────────────────────────────────────────
+  useEffect(() => { localStorage.setItem('eco_language', language); }, [language]);
+  useEffect(() => {
+    localStorage.setItem('eco_dark', darkMode);
+    if (darkMode) document.documentElement.classList.add('dark');
+    else          document.documentElement.classList.remove('dark');
+  }, [darkMode]);
+
+  return (
+    <AppContext.Provider value={{
+      loaded,
+      currentUser, login, logout, updateCurrentUser,
+      language, setLanguage,
+      darkMode, setDarkMode,
+      tick,
+      getUsers, saveUsers,
+      getCustomers, saveCustomers,
+      getBills, saveBills,
+      getRequests, saveRequests,
+      getServices, saveServices,
+      getCompanyProfile, saveCompanyProfile,
+      getLocations, saveLocations,
+      generateBillNumber, getBillByNumber,
+      getVerificationRequestsFor, getVerificationRequestsSentBy, getPendingVerificationsCount,
+      isSuperior, isAssistant, isFirstUser, getAssistants,
+      getPendingBillsCount,
+      approveBill, rejectBill, cancelBill, markBillSent,
+      // notifications
+      getNotifications, getUnreadCount, addNotificationFor, markAllRead, clearNotifications,
+      // verification
+      requestVerification, notifyEditAfterVerification, notifyNewBillPending,
+      // live sync
+      refreshAll,
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useApp = () => useContext(AppContext);
