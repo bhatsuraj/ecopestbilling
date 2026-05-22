@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -5,13 +6,11 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import re
+import asyncio
 import logging
 import secrets
 import base64
-import smtplib
-import ssl
-from email.message import EmailMessage
-from email.utils import formataddr
+import resend
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Any, Dict
@@ -122,18 +121,7 @@ class FirebaseLoginBody(BaseModel):
 
 @api_router.post("/auth/firebase")
 async def firebase_login(body: FirebaseLoginBody):
-    """Verify Firebase ID token → upsert MongoDB user → return app user record.
-
-    The flow:
-      1. Frontend signs in with Firebase (email link / phone OTP)
-      2. Frontend grabs the ID token via firebaseUser.getIdToken()
-      3. Frontend POSTs the token here
-      4. Server verifies the token and looks up the MongoDB user by
-         firebase_uid OR by email/phone.
-      5. If no record exists, server creates one.
-         - FIRST USER EVER → role = 'superior' (with employeeId ECO001)
-         - SUBSEQUENT USERS → role = 'assistant' (auto-generated employeeId)
-    """
+    """Verify Firebase ID token → upsert MongoDB user → return app user record."""
     try:
         decoded = verify_id_token(body.id_token)
     except Exception as exc:  # noqa: BLE001
@@ -172,13 +160,12 @@ async def firebase_login(body: FirebaseLoginBody):
         return existing
 
     # 3. First-time user → create a new MongoDB record
-    # Check if this is the FIRST USER EVER (becomes superior admin)
     total_users = await users_collection.count_documents({})
     is_first_user = total_users == 0
-    
+
     role = "superior" if is_first_user else "assistant"
     employee_id = "ECO001" if is_first_user else f"ECO{str(total_users + 1).zfill(3)}"
-    
+
     new_user = {
         "id": str(uuid.uuid4()),
         "name": name,
@@ -191,11 +178,11 @@ async def firebase_login(body: FirebaseLoginBody):
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     await users_collection.insert_one(dict(new_user))
-    
+
     logging.info(
         f"Created new user: {email or phone} as {role.upper()} (employeeId: {employee_id})"
     )
-    
+
     return new_user
 
 
@@ -203,8 +190,7 @@ async def get_current_user(
     creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ) -> dict:
     """FastAPI dependency — extracts the bearer token, verifies it via Firebase,
-    and returns the corresponding MongoDB user. Not used yet, but available
-    for any future protected endpoint."""
+    and returns the corresponding MongoDB user."""
     if not creds or not creds.credentials:
         raise HTTPException(status_code=401, detail="Missing bearer token")
     try:
@@ -236,20 +222,14 @@ class SimpleRegisterBody(BaseModel):
 
 @api_router.get("/auth/superior-exists")
 async def superior_exists():
-    """Returns whether a Superior Admin has already been registered.
-    Used by the public Register page to hide itself once the system is initialised."""
+    """Returns whether a Superior Admin has already been registered."""
     count = await users_collection.count_documents({"role": "superior"})
     return {"exists": count > 0}
 
 
 @api_router.post("/auth/simple-register")
 async def simple_register(body: SimpleRegisterBody):
-    """Public registration endpoint — used ONLY to create the very first Superior Admin.
-    
-    Once a Superior Admin exists, this endpoint is locked and assistants must be
-    created from the in-app Admin Management screen (via /auth/create-assistant).
-    """
-    # Lock the endpoint once a superior already exists
+    """Public registration endpoint — used ONLY to create the very first Superior Admin."""
     superior_count = await users_collection.count_documents({"role": "superior"})
     if superior_count > 0:
         raise HTTPException(
@@ -261,7 +241,6 @@ async def simple_register(body: SimpleRegisterBody):
     phone_norm = (body.phone or "").strip()
     _validate_password(body.password)
 
-    # Check if email already exists (paranoia — shouldn't happen on first user)
     existing = await users_collection.find_one(
         {"email": {"$regex": f"^{re.escape(email_norm)}$", "$options": "i"}}, {"_id": 0}
     )
@@ -276,7 +255,7 @@ async def simple_register(body: SimpleRegisterBody):
         "name": body.name,
         "email": email_norm,
         "phone": phone_norm,
-        "password": body.password,  # Plain text for now (temporary)
+        "password": body.password,
         "role": role,
         "employeeId": employee_id,
         "firebase_uid": "",
@@ -294,11 +273,7 @@ async def simple_register(body: SimpleRegisterBody):
 
 @api_router.post("/auth/create-assistant")
 async def create_assistant(body: SimpleRegisterBody):
-    """Create an Assistant Admin. Used by the Superior from Admin Management.
-    
-    Requires that a Superior already exists (otherwise the very first user must
-    register via /auth/simple-register and become the Superior).
-    """
+    """Create an Assistant Admin. Used by the Superior from Admin Management."""
     superior_count = await users_collection.count_documents({"role": "superior"})
     if superior_count == 0:
         raise HTTPException(
@@ -316,8 +291,6 @@ async def create_assistant(body: SimpleRegisterBody):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Reject duplicate phone numbers (compare last 10 digits so +91 vs raw 10-digit
-    # representations are matched consistently).
     phone_tail = re.sub(r"\D", "", phone_norm)[-10:]
     if phone_tail:
         async for u in users_collection.find({}, {"_id": 0, "phone": 1}):
@@ -347,22 +320,15 @@ async def create_assistant(body: SimpleRegisterBody):
 
 @api_router.post("/auth/simple-login")
 async def simple_login(body: SimpleLoginBody):
-    """Login with email OR phone + password.
-
-    The frontend sends the user-typed identifier in the `email` field — we
-    detect whether it looks like an email (contains '@') and search the users
-    collection accordingly. Emails are matched case-insensitively.
-    """
+    """Login with email OR phone + password."""
     identifier = (body.email or "").strip()
     if not identifier:
         raise HTTPException(status_code=400, detail="Email or phone is required")
 
     if "@" in identifier:
-        # Treat as email — match case-insensitively to support legacy records.
         email_lc = identifier.lower()
         query = {"email": {"$regex": f"^{re.escape(email_lc)}$", "$options": "i"}}
     else:
-        # Treat as phone — match exact, or with leading '+' tolerated
         digits = re.sub(r"\D", "", identifier)
         candidates = {identifier}
         if digits:
@@ -400,36 +366,25 @@ magic_link_tokens = {}
 
 @api_router.post("/auth/magic-link/request")
 async def request_magic_link(body: MagicLinkRequestBody):
-    """Generate a magic link token for email login.
-    
-    For now, returns the link to display on screen.
-    Later, can be sent via email service.
-    """
+    """Generate a magic link token for email login."""
     email = body.email.strip().lower()
-    
-    # Check if user exists
+
     user = await users_collection.find_one({"email": email}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="No account found with this email. Please register first.")
-    
-    # Generate secure token
+
     token = secrets.token_urlsafe(32)
-    
-    # Store token with expiration (15 minutes)
+
     magic_link_tokens[token] = {
         "email": email,
         "expires": datetime.now(timezone.utc) + timedelta(minutes=15),
     }
-    
-    # Generate magic link
-    frontend_url = os.environ.get("FRONTEND_URL", "https://billing-preview-12.preview.emergentagent.com")
+
+    frontend_url = os.environ.get("FRONTEND_URL", "https://ecopestbilling.vercel.app")
     magic_link = f"{frontend_url}/magic-login?token={token}"
-    
+
     logging.info(f"Magic link generated for {email}")
-    
-    # TODO: Send via email service (SendGrid, Mailgun, etc.)
-    # For now, return the link to display on screen
-    
+
     return {
         "message": "Magic link generated successfully",
         "link": magic_link,
@@ -442,28 +397,24 @@ async def request_magic_link(body: MagicLinkRequestBody):
 async def verify_magic_link(body: MagicLinkVerifyBody):
     """Verify magic link token and log user in."""
     token = body.token
-    
-    # Check if token exists
+
     if token not in magic_link_tokens:
         raise HTTPException(status_code=400, detail="Invalid or expired magic link")
-    
+
     token_data = magic_link_tokens[token]
-    
-    # Check expiration
+
     if datetime.now(timezone.utc) > token_data["expires"]:
         del magic_link_tokens[token]
         raise HTTPException(status_code=400, detail="Magic link has expired. Please request a new one.")
-    
-    # Get user
+
     user = await users_collection.find_one({"email": token_data["email"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Delete token (one-time use)
+
     del magic_link_tokens[token]
-    
+
     logging.info(f"Magic link verified for {token_data['email']}")
-    
+
     return user
 
 
@@ -475,7 +426,6 @@ async def create_user(user: UserCreate):
     _ensure_str_id(user_dict)
     user_dict.setdefault("createdAt", datetime.now(timezone.utc).isoformat())
 
-    # Upsert by id so re-saving from a stale client doesn't 500.
     await users_collection.update_one(
         {"id": user_dict["id"]},
         {"$set": user_dict},
@@ -624,7 +574,6 @@ async def create_bill(bill: BillCreate):
     _ensure_str_id(bill_dict)
     bill_dict.setdefault("createdAt", datetime.now(timezone.utc).isoformat())
 
-    # Upsert by billNumber (the user-facing unique key)
     await bills_collection.update_one(
         {"billNumber": bill_dict["billNumber"]},
         {"$set": bill_dict},
@@ -808,8 +757,6 @@ async def clear_user_notifications(user_id: str):
 
 
 # ==================== SERVICES ENDPOINTS ====================
-# Services are stored as a single bulk collection. The frontend treats them
-# as one editable list, so we expose GET (list) + PUT (replace-all).
 
 @api_router.get("/services")
 async def get_services() -> List[Dict[str, Any]]:
@@ -822,7 +769,6 @@ async def replace_services(services: List[Dict[str, Any]]):
     """Replace the entire services collection with the provided list."""
     await services_collection.delete_many({})
     if services:
-        # Strip _id if any client accidentally posted it
         cleaned = [{k: v for k, v in s.items() if k != "_id"} for s in services]
         await services_collection.insert_many(cleaned)
     saved = await services_collection.find({}, {"_id": 0}).to_list(10000)
@@ -830,9 +776,10 @@ async def replace_services(services: List[Dict[str, Any]]):
 
 
 # ---------------------------------------------------------------------------
-# Email (SMTP) — used by the invoice "Share → Email" flow so the customer
-# receives the PDF as a real attachment, not via a Gmail compose URL.
-# Auth is via a Gmail App Password stored in backend/.env.
+# Email (Resend HTTP API) — used by the invoice "Share → Email" flow so the
+# customer receives the PDF as a real attachment. Uses Resend instead of raw
+# SMTP because Render's free tier blocks outbound SMTP ports (25/465/587).
+# Auth is via RESEND_API_KEY stored in backend/.env (or Render dashboard env).
 # ---------------------------------------------------------------------------
 class SendBillEmailBody(BaseModel):
     to: EmailStr
@@ -844,22 +791,20 @@ class SendBillEmailBody(BaseModel):
 
 @api_router.post("/bills/send-email")
 async def send_bill_email(payload: SendBillEmailBody):
-    """Send an invoice email with the PDF attached via Gmail SMTP.
+    """Send an invoice email with the PDF attached via Resend HTTP API.
 
-    Reads SMTP credentials from environment variables. Returns 500 with a
-    descriptive error if the email could not be delivered (caller surfaces it
-    in the share modal).
+    Reads RESEND_API_KEY and SENDER_EMAIL from environment variables. Returns
+    500 with a descriptive error if the email could not be delivered (caller
+    surfaces it in the share modal).
     """
-    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "465"))
-    smtp_user = os.environ.get("SMTP_USER", "")
-    smtp_pass = os.environ.get("SMTP_PASSWORD", "")
-    from_name = os.environ.get("SMTP_FROM_NAME", "") or smtp_user
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    sender_email = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+    from_name = os.environ.get("SENDER_NAME", "Eco Pest Solutions")
 
-    if not smtp_user or not smtp_pass:
+    if not api_key:
         raise HTTPException(
             status_code=500,
-            detail="Email not configured. Missing SMTP_USER / SMTP_PASSWORD on the server.",
+            detail="Email not configured. Missing RESEND_API_KEY on the server.",
         )
 
     # Decode the PDF (frontend sends raw base64, no data: prefix expected,
@@ -869,8 +814,7 @@ async def send_bill_email(payload: SendBillEmailBody):
         comma = b64.find(",")
         if comma != -1:
             b64 = b64[comma + 1:]
-    # Strip whitespace/newlines defensively (base64 from FileReader is clean,
-    # but proxies sometimes insert them).
+    # Strip whitespace/newlines defensively.
     b64 = re.sub(r"\s+", "", b64)
     try:
         pdf_bytes = base64.b64decode(b64, validate=False)
@@ -880,48 +824,47 @@ async def send_bill_email(payload: SendBillEmailBody):
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="Empty PDF payload.")
 
-    # Sanitize filename — Gmail accepts most chars but strip CR/LF to avoid
-    # header injection.
+    # Sanitize filename.
     safe_name = re.sub(r"[\r\n]+", "_", payload.filename or "invoice.pdf").strip() or "invoice.pdf"
     if not safe_name.lower().endswith(".pdf"):
         safe_name += ".pdf"
 
-    msg = EmailMessage()
-    msg["From"] = formataddr((from_name, smtp_user))
-    msg["To"] = str(payload.to)
-    msg["Subject"] = payload.subject or "Invoice"
-    msg.set_content(payload.body or "Please find the invoice attached.")
-    msg.add_attachment(
-        pdf_bytes,
-        maintype="application",
-        subtype="pdf",
-        filename=safe_name,
-    )
+    # Re-encode bytes to clean base64 for Resend attachment payload.
+    attachment_b64 = base64.b64encode(pdf_bytes).decode("ascii")
 
-    # Gmail SMTP: 465 = implicit SSL, 587 = STARTTLS. Branch on port.
+    resend.api_key = api_key
+    params = {
+        "from": f"{from_name} <{sender_email}>",
+        "to": [str(payload.to)],
+        "subject": payload.subject or "Invoice",
+        "text": payload.body or "Please find the invoice attached.",
+        "attachments": [
+            {
+                "filename": safe_name,
+                "content": attachment_b64,
+            }
+        ],
+    }
+
     try:
-        if smtp_port == 465:
-            ctx = ssl.create_default_context()
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=ctx, timeout=30) as srv:
-                srv.login(smtp_user, smtp_pass)
-                srv.send_message(msg)
-        else:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as srv:
-                srv.starttls(context=ssl.create_default_context())
-                srv.login(smtp_user, smtp_pass)
-                srv.send_message(msg)
-    except smtplib.SMTPAuthenticationError as e:
-        logging.error(f"SMTP auth failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Gmail rejected the credentials. Check SMTP_USER / SMTP_PASSWORD and that the App Password is still valid.",
-        )
-    except (smtplib.SMTPException, OSError) as e:
-        logging.error(f"SMTP send failed: {e}")
+        # Resend SDK is synchronous — run in a thread so we don't block the
+        # FastAPI event loop.
+        result = await asyncio.to_thread(resend.Emails.send, params)
+    except Exception as e:
+        logging.error(f"Resend send failed: {e}")
         raise HTTPException(status_code=500, detail=f"Could not send email: {e}")
 
-    logging.info(f"Email: invoice sent to {payload.to} ({safe_name}, {len(pdf_bytes)} bytes)")
-    return {"ok": True, "to": str(payload.to), "filename": safe_name, "size": len(pdf_bytes)}
+    email_id = result.get("id") if isinstance(result, dict) else None
+    logging.info(
+        f"Email: invoice sent to {payload.to} ({safe_name}, {len(pdf_bytes)} bytes, id={email_id})"
+    )
+    return {
+        "ok": True,
+        "to": str(payload.to),
+        "filename": safe_name,
+        "size": len(pdf_bytes),
+        "id": email_id,
+    }
 
 
 # ---------------------------------------------------------------------------
