@@ -797,8 +797,8 @@ async def send_bill_email(payload: SendBillEmailBody):
     500 with a descriptive error if the email could not be delivered (caller
     surfaces it in the share modal).
     """
-    api_key = os.environ.get("RESEND_API_KEY", "")
-    sender_email = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+    api_key = os.environ.get("RESEND_API_KEY", "re_bJsABazV_H1Y2i46eqqoWfoyNoP7KXARn")
+    sender_email = os.environ.get("SENDER_EMAIL", "solutionecopest@gmail.com")
     from_name = os.environ.get("SENDER_NAME", "Eco Pest Solutions")
 
     if not api_key:
