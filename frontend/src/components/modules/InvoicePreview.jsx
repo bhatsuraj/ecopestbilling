@@ -21,9 +21,6 @@ const PRINT_STYLES = `
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
-    width: 100% !important;
-    height: 100% !important;
-    overflow: visible !important;
   }
 
   body {
@@ -33,7 +30,7 @@ const PRINT_STYLES = `
 
   @page {
     size: A4 portrait;
-    margin: 6mm !important;
+    margin: 5mm !important;
   }
 
   .no-print {
@@ -41,34 +38,18 @@ const PRINT_STYLES = `
   }
 
   #invoice-print-area {
-    width: 198mm !important;
-    min-height: 285mm !important;
-    max-width: 198mm !important;
+    width: 100% !important;
+    max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
     box-sizing: border-box !important;
     background: #ffffff !important;
-    overflow: visible !important;
     position: relative !important;
     display: block !important;
     border: none !important;
     box-shadow: none !important;
-    page-break-inside: auto !important;
-    break-inside: auto !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-  }
-
-  #invoice-sheet {
-    width: 100% !important;
-    min-height: 285mm !important;
-    box-sizing: border-box !important;
-    background: #ffffff !important;
-    border: 1.2px solid #000 !important;
-    padding: 6mm !important;
-    overflow: visible !important;
-    -webkit-box-decoration-break: clone !important;
-    box-decoration-break: clone !important;
   }
 
   table {
@@ -176,7 +157,7 @@ const fmtAmt = (v) => {
 
 export default function InvoicePreview({ bill, onClose, onEdit, language, autoShare, onSent }) {
   const { getCompanyProfile, getCustomers } = useApp();
-  const { notify, confirm } = useConfirm();
+  const { notify } = useConfirm();
   const navigate = useNavigate();
   const invoiceRef = useRef(null);
   const company = getCompanyProfile();
@@ -324,34 +305,26 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
 
     return html2pdf()
       .set({
-        margin: [6, 6, 6, 6],
+        margin: [8, 5, 8, 5], // Provides natural breathing room for the PDF engine
         filename: buildPdfFilename(),
-        image: {
-          type: 'jpeg',
-          quality: 1,
-        },
+        image: { type: 'jpeg', quality: 1 },
         html2canvas: {
-          scale: 2.5,
+          scale: 2, 
           useCORS: true,
           allowTaint: true,
           logging: false,
           backgroundColor: '#ffffff',
           letterRendering: true,
-          scrollX: 0,
-          scrollY: 0,
-          windowWidth: 794,
-          windowHeight: element?.scrollHeight || 1122,
         },
         jsPDF: {
           unit: 'mm',
           format: 'a4',
           orientation: 'portrait',
           compress: true,
-          hotfixes: ['px_scaling'],
         },
         pagebreak: {
           mode: ['css', 'legacy'],
-          avoid: ['tr', 'td', 'th'],
+          avoid: ['tr', 'td', 'th', '.avoid-break'], // Prevents chopping rows and specific blocks in half
         },
       })
       .from(element)
@@ -471,105 +444,66 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
     }
   };
 
-  // Share via Email — Generates the invoice PDF, downloads it locally, then
-  // opens the user's default email client (mailto:) with the To / Subject /
-  // Body pre-filled. No SMTP, no backend dependency. The user just attaches
-  // the downloaded PDF and hits send.
-  //
-  // On mobile / browsers that support the Web Share API with file
-  // attachments, we use that instead so the PDF is attached automatically.
- const handleEmailShare = async () => {
-  setShowShareMenu(false);
+  const handleEmailShare = async () => {
+    setShowShareMenu(false);
 
-  let customerEmail =
-    bill?.customerEmail || bill?.customer?.email || '';
+    let customerEmail = bill?.customerEmail || bill?.customer?.email || '';
 
-  // Fallback from customer list
-  if (!customerEmail) {
-    const customers = getCustomers();
+    if (!customerEmail) {
+      const customers = getCustomers();
+      const match = customers.find(
+        (c) =>
+          (bill?.customerId && String(c.id) === String(bill.customerId)) ||
+          (bill?.customerName && String(c.name || '').toLowerCase() === String(bill.customerName || '').toLowerCase())
+      );
+      customerEmail = match?.email || '';
+    }
 
-    const match = customers.find(
-      (c) =>
-        (bill?.customerId &&
-          String(c.id) === String(bill.customerId)) ||
-        (bill?.customerName &&
-          String(c.name || '').toLowerCase() ===
-            String(bill.customerName || '').toLowerCase())
-    );
+    const billNumber = bill?.billNumber || '';
+    const amount = (bill?.totalAmount ?? bill?.grandTotal ?? 0).toLocaleString('en-IN');
+    const companyName = company.name || 'Eco Pest Solutions';
+    const subject = `Invoice ${billNumber} from ${companyName}`;
 
-    customerEmail = match?.email || '';
-  }
+    const body =
+      `Dear Customer,\n\n` +
+      `Customer Email: ${customerEmail || 'No Email'}\n\n` +
+      `Please find your invoice attached.\n\n` +
+      `Bill Number: ${billNumber}\n` +
+      `Total Amount: ₹${amount}\n\n` +
+      `Thank you for your business!\n\n` +
+      `Best regards,\n${companyName}`;
 
-  const billNumber = bill?.billNumber || '';
+    setGeneratingPDF(true);
 
-  const amount = (
-    bill?.totalAmount ??
-    bill?.grandTotal ??
-    0
-  ).toLocaleString('en-IN');
+    try {
+      const file = await buildPdfFile();
+      downloadPdfLocally(file);
 
-  const companyName =
-    company.name || 'Eco Pest Solutions';
+      const gmailUrl =
+        `https://mail.google.com/mail/?view=cm&fs=1&tf=1` +
+        `&to=${encodeURIComponent(customerEmail)}` +
+        `&su=${encodeURIComponent(subject)}` +
+        `&body=${encodeURIComponent(body + `\n\nPlease attach the downloaded invoice PDF before sending.`)}`;
 
-  const subject = `Invoice ${billNumber} from ${companyName}`;
+      window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+      onSent && onSent('email');
 
-  const body =
-    `Dear Customer,\n\n` +
-    `Please find your invoice attached.\n\n` +
-    `Bill Number: ${billNumber}\n` +
-    `Total Amount: ₹${amount}\n\n` +
-    `Thank you for your business!\n\n` +
-    `Best regards,\n${companyName}`;
-
-  setGeneratingPDF(true);
-
-  try {
-    // Generate PDF
-    const file = await buildPdfFile();
-
-    // Download PDF automatically
-    downloadPdfLocally(file);
-
-    // Gmail editable compose URL
-    const gmailUrl =
-      `https://mail.google.com/mail/?view=cm&fs=1&tf=1` +
-      `&to=${encodeURIComponent(customerEmail)}` +
-      `&su=${encodeURIComponent(subject)}` +
-      `&body=${encodeURIComponent(
-        body +
-          `\n\nPlease attach the downloaded invoice PDF before sending.`
-      )}`;
-
-    // Open Gmail in new tab
-    window.open(
-      gmailUrl,
-      '_blank',
-      'noopener,noreferrer'
-    );
-
-    onSent && onSent('email');
-
-    await notify({
-      title: 'Gmail Opened',
-      message:
-        'Gmail opened successfully.',
-      variant: 'success',
-    });
-
-  } catch (err) {
-    console.error('Email share error:', err);
-
-    await notify({
-      title: 'Email failed',
-      message:
-        'Could not open Gmail.',
-      variant: 'danger',
-    });
-
-  } finally {
-    setGeneratingPDF(false);
-  }
-};
+      await notify({
+        title: 'Gmail Opened',
+        message: 'Invoice PDF downloaded successfully. Gmail opened in new tab.',
+        variant: 'success',
+      });
+    } catch (err) {
+      console.error('Email share error:', err);
+      await notify({
+        title: 'Email failed',
+        message: 'Could not open Gmail.',
+        variant: 'danger',
+      });
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
 
   const phones = [company.phone1, company.phone2, company.phone3].filter(Boolean).join(' / ');
   const tbl = { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' };
@@ -733,48 +667,33 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
 
       <style>{PRINT_STYLES}</style>
 
+      {/* Using standard A4 pixel width (794px). Height is removed so content scales downwards dynamically, 
+        fixing the clipping issue. html2pdf will automatically handle pagination.
+      */}
       <div
         id="invoice-print-area"
         ref={invoiceRef}
         style={{
-          width: '198mm',
-          minHeight: '285mm',
-          maxWidth: '198mm',
+          width: '794px',
           margin: '0 auto',
-          padding: '0',
+          padding: '24px',
           boxSizing: 'border-box',
           background: '#ffffff',
-          overflow: 'visible',
           position: 'relative',
           display: 'block',
           fontFamily: 'Arial, sans-serif',
           fontSize: '11px',
           color: '#0d0000',
-          border: 'none',
-          boxShadow: 'none',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)', // Visible on screen only
           WebkitPrintColorAdjust: 'exact',
           printColorAdjust: 'exact',
-          pageBreakInside: 'auto',
         }}
       >
-        <div
-          id="invoice-sheet"
-          style={{
-            width: '100%',
-            minHeight: '285mm',
-            boxSizing: 'border-box',
-            background: '#ffffff',
-            border: '1.2px solid #000',
-            padding: '6mm',
-            overflow: 'visible',
-            WebkitBoxDecorationBreak: 'clone',
-            boxDecorationBreak: 'clone',
-          }}
-        >
+        <div id="invoice-sheet" style={{ width: '95%', boxSizing: 'border-box', background: '#ffffff' }}>
           <table style={{ ...tbl, marginBottom: '0' }}>
             <tbody>
               <tr>
-                <td style={{ ...cell({ fontWeight: 'bold', width: '33%', fontSize: '12px', padding: '8px' }) }}>
+                <td style={{ ...cell({ fontWeight: 'bold', width: '33%', fontSize: '12px', padding: '8px', border: 'none' }) }}>
                   ORIGINAL COPY
                 </td>
                 <td
@@ -787,12 +706,13 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                       width: '34%',
                       padding: '10px',
                       color: '#2a5f51',
+                      border: 'none',
                     }),
                   }}
                 >
                   {bill.type === 'tax' ? 'TAX INVOICE' : 'CASH BILL'}
                 </td>
-                <td style={{ ...cell({ width: '33%', padding: '8px' }) }}></td>
+                <td style={{ ...cell({ width: '33%', padding: '8px', border: 'none' }) }}></td>
               </tr>
             </tbody>
           </table>
@@ -1000,7 +920,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
               </tr>
             </tbody>
 
-            <tfoot>
+            <tfoot className="avoid-break">
               {(() => {
                 const tot = fmtAmt(subtotal);
                 const cg = fmtAmt(cgst);
@@ -1093,7 +1013,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
             </tfoot>
           </table>
 
-          <table style={{ ...tbl, marginBottom: '0' }}>
+          <table style={{ ...tbl, marginBottom: '0' }} className="avoid-break">
             <tbody>
               <tr>
                 <td style={{ ...cell({ fontWeight: 'bold', padding: '10px', fontSize: '11px' }) }}>
@@ -1104,7 +1024,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
           </table>
 
           {bill.remarks && bill.remarks.trim() && (
-            <table style={{ ...tbl, marginBottom: '0' }}>
+            <table style={{ ...tbl, marginBottom: '0' }} className="avoid-break">
               <tbody>
                 <tr>
                   <td style={{ ...cell({ padding: '10px', fontSize: '11px', color: '#043a0e' }) }}>
@@ -1115,7 +1035,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
             </table>
           )}
 
-          <table style={tbl}>
+          <table style={tbl} className="avoid-break">
             <tbody>
               <tr>
                 <td style={{ ...cell({ width: '60%', verticalAlign: 'top', padding: '10px' }) }}>
