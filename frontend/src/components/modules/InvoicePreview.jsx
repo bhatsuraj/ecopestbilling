@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { t } from '../../i18n/translations';
@@ -16,66 +17,21 @@ const TERMS = [
 
 const PRINT_STYLES = `
 @media print {
-  html,
-  body {
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-  }
-
-  body {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  @page {
-    size: A4 portrait;
-    margin: 5mm !important;
-  }
-
-  .no-print {
-    display: none !important;
-  }
-
+  html, body { margin: 0 !important; padding: 0 !important; background: #ffffff !important; }
+  body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  @page { size: A4 portrait; margin: 5mm !important; }
+  .no-print { display: none !important; }
   #invoice-print-area {
-    width: 100% !important;
-    max-width: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
-    background: #ffffff !important;
-    position: relative !important;
-    display: block !important;
-    border: none !important;
-    box-shadow: none !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+    width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important;
+    box-sizing: border-box !important; background: #ffffff !important; position: relative !important;
+    display: block !important; border: none !important; box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
-
-  table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    table-layout: fixed !important;
-  }
-
-  thead {
-    display: table-header-group !important;
-  }
-
-  tfoot {
-    display: table-footer-group !important;
-  }
-
-  tr,
-  td,
-  th {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  img {
-    max-width: 100% !important;
-  }
+  table { width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
+  thead { display: table-header-group !important; }
+  tfoot { display: table-footer-group !important; }
+  tr, td, th { page-break-inside: avoid !important; break-inside: avoid !important; }
+  img { max-width: 100% !important; }
 }
 `;
 
@@ -112,39 +68,16 @@ const calcAmount = (row) => {
 
 function numberToWords(num) {
   if (!num || num === 0) return 'Zero';
-  const ones = [
-    '',
-    'One',
-    'Two',
-    'Three',
-    'Four',
-    'Five',
-    'Six',
-    'Seven',
-    'Eight',
-    'Nine',
-    'Ten',
-    'Eleven',
-    'Twelve',
-    'Thirteen',
-    'Fourteen',
-    'Fifteen',
-    'Sixteen',
-    'Seventeen',
-    'Eighteen',
-    'Nineteen',
-  ];
-  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
+  const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
   const convert = (n) => {
     if (n < 20) return ones[n];
-    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '');
-    if (n < 1000) return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + convert(n % 100) : '');
-    if (n < 100000) return convert(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 ? ' ' + convert(n % 1000) : '');
-    if (n < 10000000) return convert(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 ? ' ' + convert(n % 100000) : '');
-    return convert(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 ? ' ' + convert(n % 10000000) : '');
+    if (n < 100) return tens[Math.floor(n/10)] + (n%10 ? ' ' + ones[n%10] : '');
+    if (n < 1000) return ones[Math.floor(n/100)] + ' Hundred' + (n%100 ? ' ' + convert(n%100) : '');
+    if (n < 100000) return convert(Math.floor(n/1000)) + ' Thousand' + (n%1000 ? ' ' + convert(n%1000) : '');
+    if (n < 10000000) return convert(Math.floor(n/100000)) + ' Lakh' + (n%100000 ? ' ' + convert(n%100000) : '');
+    return convert(Math.floor(n/10000000)) + ' Crore' + (n%10000000 ? ' ' + convert(n%10000000) : '');
   };
-
   return convert(Math.min(Math.floor(num), 999999999));
 }
 
@@ -153,6 +86,28 @@ const fmtAmt = (v) => {
   const rs = Math.floor(n);
   const ps = Math.round((n - rs) * 100);
   return { rs: rs.toLocaleString('en-IN'), ps: String(ps).padStart(2, '0') };
+};
+
+// --- Device detection helpers ---
+const isMobileDevice = () => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const uaMatch = /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  const iPadOS = /Macintosh/i.test(ua) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1;
+  return uaMatch || iPadOS;
+};
+
+const canNativeShareFiles = (file) => {
+  try {
+    return (
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function' &&
+      typeof navigator.canShare === 'function' &&
+      navigator.canShare({ files: [file] })
+    );
+  } catch (_) {
+    return false;
+  }
 };
 
 export default function InvoicePreview({ bill, onClose, onEdit, language, autoShare, onSent }) {
@@ -222,43 +177,31 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
   useEffect(() => {
     let mounted = true;
     if (company.logoUrl && !company.logoUrl.startsWith('data:')) {
-      toBase64(company.logoUrl).then((b64) => {
-        if (mounted) setLogoSrc(b64);
-      });
+      toBase64(company.logoUrl).then((b64) => { if (mounted) setLogoSrc(b64); });
     } else {
       setLogoSrc(company.logoUrl || '');
     }
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [company.logoUrl]);
 
   useEffect(() => {
     let mounted = true;
     if (company.signUrl && !company.signUrl.startsWith('data:')) {
-      toBase64(company.signUrl).then((b64) => {
-        if (mounted) setSignSrc(b64);
-      });
+      toBase64(company.signUrl).then((b64) => { if (mounted) setSignSrc(b64); });
     } else {
       setSignSrc(company.signUrl || '');
     }
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [company.signUrl]);
 
   useEffect(() => {
     let mounted = true;
     if (company.sealUrl && !company.sealUrl.startsWith('data:')) {
-      toBase64(company.sealUrl).then((b64) => {
-        if (mounted) setSealSrc(b64);
-      });
+      toBase64(company.sealUrl).then((b64) => { if (mounted) setSealSrc(b64); });
     } else {
       setSealSrc(company.sealUrl || '');
     }
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [company.sealUrl]);
 
   const subtotal = bill.subtotal ?? (bill.rows || []).reduce((s, r) => s + calcAmount(r), 0);
@@ -288,9 +231,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
     const parts = desc.split(new RegExp(`(${loc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
     return parts.map((part, i) =>
       part.toLowerCase() === loc.toLowerCase() ? (
-        <span key={i} style={{ color: '#cc0000', fontWeight: 700 }}>
-          {part}
-        </span>
+        <span key={i} style={{ color: '#cc0000', fontWeight: 700 }}>{part}</span>
       ) : (
         <React.Fragment key={i}>{part}</React.Fragment>
       )
@@ -305,27 +246,12 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
 
     return html2pdf()
       .set({
-        margin: [8, 5, 8, 5], // Provides natural breathing room for the PDF engine
+        margin: [8, 5, 8, 5],
         filename: buildPdfFilename(),
         image: { type: 'jpeg', quality: 1 },
-        html2canvas: {
-          scale: 2, 
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          letterRendering: true,
-        },
-        jsPDF: {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait',
-          compress: true,
-        },
-        pagebreak: {
-          mode: ['css', 'legacy'],
-          avoid: ['tr', 'td', 'th', '.avoid-break'], // Prevents chopping rows and specific blocks in half
-        },
+        html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#ffffff', letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
+        pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'td', 'th', '.avoid-break'] },
       })
       .from(element)
       .outputPdf('blob');
@@ -374,6 +300,11 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  // ============================================================
+  //  WHATSAPP SHARE
+  //  - Mobile: native Web Share API attaches PDF to WhatsApp directly
+  //  - Desktop: copy PDF to clipboard (or download) + open WhatsApp Web with prefilled text
+  // ============================================================
   const handleWhatsAppShare = async () => {
     setShowShareMenu(false);
 
@@ -384,18 +315,23 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
     const billNumber = bill?.billNumber || '';
     const amount = (bill?.totalAmount ?? bill?.grandTotal ?? 0).toLocaleString('en-IN');
     const companyName = company.name || 'Eco Pest Solutions';
+    const companyEmail = company.email || '';
+    const customerNameStr = bill?.customerName || 'Customer';
 
     const message =
-      `Hi! Your invoice from ${companyName}\n\n` +
+      `Hi ${customerNameStr},\n\n` +
+      `Your invoice from *${companyName}* is ready.\n\n` +
       `Bill No: ${billNumber}\n` +
       `Total Amount: ₹${amount}\n\n` +
+      (companyEmail ? `For queries, reply to: ${companyEmail}\n\n` : '') +
       `Thank you for your business!`;
 
     setGeneratingPDF(true);
     try {
       const file = await buildPdfFile();
 
-      if (navigator.canShare && navigator.canShare({ files: [file] }) && typeof navigator.share === 'function') {
+      // Mobile / supported browsers: native share sheet with file attached
+      if (canNativeShareFiles(file)) {
         try {
           await navigator.share({
             title: `Invoice ${billNumber}`,
@@ -409,6 +345,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
         }
       }
 
+      // Desktop fallback: copy PDF to clipboard if possible, else download
       let clipboardOk = false;
       try {
         if (window.ClipboardItem && navigator.clipboard?.write) {
@@ -434,21 +371,23 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
       });
     } catch (err) {
       console.error('WhatsApp share error:', err);
-      await notify({
-        title: 'Share failed',
-        message: 'Could not prepare bill for sharing. Please try again.',
-        variant: 'danger',
-      });
+      await notify({ title: 'Share failed', message: 'Could not prepare bill for sharing. Please try again.', variant: 'danger' });
     } finally {
       setGeneratingPDF(false);
     }
   };
 
+  // ============================================================
+  //  EMAIL SHARE
+  //  - Mobile: native Web Share API auto-attaches PDF to the default mail app
+  //  - Desktop: auto-download PDF + open Gmail web compose with To/Subject/Body prefilled
+  //            (recipient email also placed in body for easy copy/verify)
+  // ============================================================
   const handleEmailShare = async () => {
     setShowShareMenu(false);
 
+    // Resolve recipient email
     let customerEmail = bill?.customerEmail || bill?.customer?.email || '';
-
     if (!customerEmail) {
       const customers = getCustomers();
       const match = customers.find(
@@ -462,44 +401,73 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
     const billNumber = bill?.billNumber || '';
     const amount = (bill?.totalAmount ?? bill?.grandTotal ?? 0).toLocaleString('en-IN');
     const companyName = company.name || 'Eco Pest Solutions';
+    const companyEmail = company.email || '';
+    const customerNameStr = bill?.customerName || 'Customer';
     const subject = `Invoice ${billNumber} from ${companyName}`;
 
+    // Body includes recipient + sender email so user can copy/paste & verify
     const body =
-      `Dear Customer,\n\n` +
-      `Customer Email: ${customerEmail || 'No Email'}\n\n` +
+      `Dear ${customerNameStr},\n\n` +
       `Please find your invoice attached.\n\n` +
-      `Bill Number: ${billNumber}\n` +
-      `Total Amount: ₹${amount}\n\n` +
+      `------------------------------------------\n` +
+      `Bill Number   : ${billNumber}\n` +
+      `Total Amount  : ₹${amount}\n` +
+      `------------------------------------------\n\n` +
+      `Recipient Email (for verification / copy): ${customerEmail || '— not on file —'}\n` +
+      (companyEmail ? `Sender Email   : ${companyEmail}\n\n` : '\n') +
       `Thank you for your business!\n\n` +
-      `Best regards,\n${companyName}`;
+      `Best regards,\n` +
+      `${companyName}`;
 
     setGeneratingPDF(true);
 
     try {
       const file = await buildPdfFile();
+
+      // --- Mobile path: native share sheet auto-attaches the PDF to the mail app ---
+      if (isMobileDevice() && canNativeShareFiles(file)) {
+        try {
+          await navigator.share({
+            title: subject,
+            text: body,
+            files: [file],
+          });
+          onSent && onSent('email');
+          await notify({
+            title: 'Share sheet opened',
+            message: 'Pick your Email app — the invoice PDF will be attached automatically.',
+            variant: 'success',
+          });
+          return;
+        } catch (err) {
+          if (err?.name === 'AbortError') return;
+        }
+      }
+
+      // --- Desktop path: download PDF + open Gmail web compose with prefilled fields ---
       downloadPdfLocally(file);
 
       const gmailUrl =
         `https://mail.google.com/mail/?view=cm&fs=1&tf=1` +
-        `&to=${encodeURIComponent(customerEmail)}` +
+        (customerEmail ? `&to=${encodeURIComponent(customerEmail)}` : '') +
         `&su=${encodeURIComponent(subject)}` +
-        `&body=${encodeURIComponent(body + `\n\nPlease attach the downloaded invoice PDF before sending.`)}`;
+        `&body=${encodeURIComponent(
+          body + `\n\n(The invoice PDF has been downloaded — please attach it before sending.)`
+        )}`;
 
       window.open(gmailUrl, '_blank', 'noopener,noreferrer');
       onSent && onSent('email');
 
       await notify({
-        title: 'Gmail Opened',
-        message: 'Invoice PDF downloaded successfully. Gmail opened in new tab.',
+        title: 'Gmail opened',
+        message: customerEmail
+          ? `Invoice PDF downloaded. Gmail opened with "${customerEmail}" pre-filled — just attach the PDF and send.`
+          : 'Invoice PDF downloaded. Gmail opened — the recipient email is shown in the body for easy copy/paste.',
         variant: 'success',
       });
     } catch (err) {
       console.error('Email share error:', err);
-      await notify({
-        title: 'Email failed',
-        message: 'Could not open Gmail.',
-        variant: 'danger',
-      });
+      await notify({ title: 'Email failed', message: 'Could not open the email composer. Please try again.', variant: 'danger' });
     } finally {
       setGeneratingPDF(false);
     }
@@ -513,11 +481,11 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
     if (!autoShare || autoFiredRef.current) return;
     if (!invoiceRef.current) return;
     autoFiredRef.current = true;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       if (autoShare === 'whatsapp') handleWhatsAppShare();
       else if (autoShare === 'email') handleEmailShare();
     }, 350);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoShare, logoSrc]);
 
@@ -633,7 +601,9 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
               </div>
 
               <p className="px-6 pb-5 text-[11px] text-slate-400 text-center">
-                {generatingPDF ? 'Preparing invoice PDF…' : 'The invoice PDF will be generated and attached automatically.'}
+                {generatingPDF
+                  ? 'Preparing invoice PDF…'
+                  : 'On mobile the PDF auto-attaches. On desktop the PDF is downloaded and the compose window opens prefilled.'}
               </p>
             </div>
           </div>
@@ -667,9 +637,6 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
 
       <style>{PRINT_STYLES}</style>
 
-      {/* Using standard A4 pixel width (794px). Height is removed so content scales downwards dynamically, 
-        fixing the clipping issue. html2pdf will automatically handle pagination.
-      */}
       <div
         id="invoice-print-area"
         ref={invoiceRef}
@@ -684,7 +651,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
           fontFamily: 'Arial, sans-serif',
           fontSize: '11px',
           color: '#0d0000',
-          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)', // Visible on screen only
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
           WebkitPrintColorAdjust: 'exact',
           printColorAdjust: 'exact',
         }}
@@ -693,26 +660,24 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
           <table style={{ ...tbl, marginBottom: '0' }}>
             <tbody>
               <tr>
-                <td style={{ ...cell({ fontWeight: 'bold', width: '33%', fontSize: '12px', padding: '8px', border: 'none' }) }}>
+                <td style={cell({ fontWeight: 'bold', width: '33%', fontSize: '12px', padding: '8px', border: 'none' })}>
                   ORIGINAL COPY
                 </td>
                 <td
-                  style={{
-                    ...cell({
-                      textAlign: 'center',
-                      fontWeight: 'bold',
-                      fontSize: '16px',
-                      letterSpacing: '1.5px',
-                      width: '34%',
-                      padding: '10px',
-                      color: '#2a5f51',
-                      border: 'none',
-                    }),
-                  }}
+                  style={cell({
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    fontSize: '16px',
+                    letterSpacing: '1.5px',
+                    width: '34%',
+                    padding: '10px',
+                    color: '#2a5f51',
+                    border: 'none',
+                  })}
                 >
                   {bill.type === 'tax' ? 'TAX INVOICE' : 'CASH BILL'}
                 </td>
-                <td style={{ ...cell({ width: '33%', padding: '8px', border: 'none' }) }}></td>
+                <td style={cell({ width: '33%', padding: '8px', border: 'none' })}></td>
               </tr>
             </tbody>
           </table>
@@ -720,12 +685,12 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
           <table style={{ ...tbl, marginBottom: '0' }}>
             <tbody>
               <tr>
-                <td style={{ ...cell({ width: '15%', textAlign: 'center', verticalAlign: 'middle', padding: '10px' }) }}>
+                <td style={cell({ width: '15%', textAlign: 'center', verticalAlign: 'middle', padding: '10px' })}>
                   {logoSrc && (
                     <img src={logoSrc} alt="Logo" data-pdf-logo style={{ width: '90px', height: '90px', objectFit: 'contain' }} />
                   )}
                 </td>
-                <td style={{ ...cell({ width: '85%', verticalAlign: 'middle', textAlign: 'left', padding: '10px' }) }}>
+                <td style={cell({ width: '85%', verticalAlign: 'middle', textAlign: 'left', padding: '10px' })}>
                   <div style={{ fontWeight: 'bold', fontSize: '18px', marginBottom: '4px', color: '#000000' }}>
                     {company.name || 'ECO PEST SOLUTIONS'}
                   </div>
@@ -743,13 +708,13 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
           <table style={{ ...tbl, marginBottom: '0' }}>
             <tbody>
               <tr>
-                <td style={{ ...cell({ fontWeight: 'bold', width: '50%', background: '#f5f5f5', padding: '8px', fontSize: '11px', textAlign: 'center' }) }}>
+                <td style={cell({ fontWeight: 'bold', width: '50%', background: '#f5f5f5', padding: '8px', fontSize: '11px', textAlign: 'center' })}>
                   CUSTOMER NAME & ADDRESS
                 </td>
-                <td style={{ ...cell({ fontWeight: 'bold', width: '25%', background: '#f5f5f5', padding: '8px', fontSize: '11px', textAlign: 'left' }) }}>
+                <td style={cell({ fontWeight: 'bold', width: '25%', background: '#f5f5f5', padding: '8px', fontSize: '11px', textAlign: 'left' })}>
                   Invoice No:
                 </td>
-                <td style={{ ...cell({ width: '25%', background: '#f5f5f5', padding: '8px', fontSize: '11px', textAlign: 'left', fontWeight: 'bold' }) }}>
+                <td style={cell({ width: '25%', background: '#f5f5f5', padding: '8px', fontSize: '11px', textAlign: 'left', fontWeight: 'bold' })}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '6px', flexWrap: 'wrap' }}>
                     <span>{bill.billNumber}</span>
                     {isCancelled && (
@@ -773,7 +738,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
               </tr>
 
               <tr>
-                <td rowSpan={6} style={{ ...cell({ verticalAlign: 'top', padding: '10px', lineHeight: '1.6' }) }}>
+                <td rowSpan={6} style={cell({ verticalAlign: 'top', padding: '10px', lineHeight: '1.6' })}>
                   <div style={{ fontSize: '14px', marginBottom: '4px' }}>
                     <strong>M/S.</strong>
                   </div>
@@ -784,53 +749,41 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                     <strong>CUSTOMER GST NO:</strong> {bill.customerGst || ''}
                   </div>
                 </td>
-                <td style={{ ...cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' }) }}>Invoice Date:</td>
-                <td style={{ ...cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' }) }}>{formatDateDDMMYY(bill.date)}</td>
+                <td style={cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' })}>Invoice Date:</td>
+                <td style={cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' })}>{formatDateDDMMYY(bill.date)}</td>
               </tr>
               <tr>
-                <td style={{ ...cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' }) }}>P.O No:</td>
-                <td style={{ ...cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' }) }}>{bill.poNumber || ''}</td>
+                <td style={cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' })}>P.O No:</td>
+                <td style={cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' })}>{bill.poNumber || ''}</td>
               </tr>
               <tr>
-                <td style={{ ...cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' }) }}>P.O Date:</td>
-                <td style={{ ...cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' }) }}>{formatDateDDMMYY(bill.poDate)}</td>
+                <td style={cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' })}>P.O Date:</td>
+                <td style={cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' })}>{formatDateDDMMYY(bill.poDate)}</td>
               </tr>
               <tr>
-                <td style={{ ...cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' }) }}>GST No</td>
-                <td style={{ ...cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' }) }}>{company.gstNumber}</td>
+                <td style={cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' })}>GST No</td>
+                <td style={cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' })}>{company.gstNumber}</td>
               </tr>
               <tr>
-                <td style={{ ...cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' }) }}>SAC No.</td>
-                <td style={{ ...cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' }) }}>{bill.customerSac || company.sacCode}</td>
+                <td style={cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' })}>SAC No.</td>
+                <td style={cell({ padding: '6px 8px', fontSize: '11px', textAlign: 'left' })}>{bill.customerSac || company.sacCode}</td>
               </tr>
               <tr>
                 <td
                   colSpan={2}
-                  style={{
-                    ...cell({
-                      padding: '10px',
-                      fontSize: '11px',
-                      lineHeight: '1.9',
-                      verticalAlign: 'top',
-                      textAlign: 'left',
-                    }),
-                  }}
+                  style={cell({
+                    padding: '10px',
+                    fontSize: '11px',
+                    lineHeight: '1.9',
+                    verticalAlign: 'top',
+                    textAlign: 'left',
+                  })}
                 >
-                  <div>
-                    <strong>BANK HOLDER :</strong> {company.bankHolder || 'ECO PEST SOLUTIONS'}
-                  </div>
-                  <div>
-                    <strong>BANK :</strong> {company.bankName || 'State Bank of India'}
-                  </div>
-                  <div>
-                    <strong>BANK A/C :</strong> {company.bankAccount || '43207089599'}
-                  </div>
-                  <div>
-                    <strong>IFSC CODE :</strong> {company.ifscCode || 'SBIN0040257'}
-                  </div>
-                  <div>
-                    <strong>MICR :</strong> {company.micrCode || '560002405'}
-                  </div>
+                  <div><strong>BANK HOLDER :</strong> {company.bankHolder || 'ECO PEST SOLUTIONS'}</div>
+                  <div><strong>BANK :</strong> {company.bankName || 'State Bank of India'}</div>
+                  <div><strong>BANK A/C :</strong> {company.bankAccount || '43207089599'}</div>
+                  <div><strong>IFSC CODE :</strong> {company.ifscCode || 'SBIN0040257'}</div>
+                  <div><strong>MICR :</strong> {company.micrCode || '560002405'}</div>
                 </td>
               </tr>
             </tbody>
@@ -839,25 +792,25 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
           <table style={{ ...tbl, marginBottom: '0' }}>
             <thead>
               <tr style={{ background: '#f0f0f0' }}>
-                <td style={{ ...cell({ fontWeight: 'bold', textAlign: 'center', width: '6%', padding: '8px 6px', fontSize: '11px' }) }}>
+                <td style={cell({ fontWeight: 'bold', textAlign: 'center', width: '6%', padding: '8px 6px', fontSize: '11px' })}>
                   SL<br />No.
                 </td>
-                <td style={{ ...descCell({ fontWeight: 'bold', textAlign: 'center', width: '46%', padding: '8px', fontSize: '11px', background: '#f0f0f0' }) }}>
+                <td style={descCell({ fontWeight: 'bold', textAlign: 'center', width: '46%', padding: '8px', fontSize: '11px', background: '#f0f0f0' })}>
                   Description of service
                 </td>
-                <td style={{ ...cell({ fontWeight: 'bold', textAlign: 'center', width: '14%', padding: '8px 6px', fontSize: '11px' }) }}>
+                <td style={cell({ fontWeight: 'bold', textAlign: 'center', width: '14%', padding: '8px 6px', fontSize: '11px' })}>
                   Type of<br />Visit
                 </td>
-                <td style={{ ...cell({ fontWeight: 'bold', textAlign: 'center', width: '14%', padding: '8px 6px', fontSize: '11px' }) }}>
+                <td style={cell({ fontWeight: 'bold', textAlign: 'center', width: '14%', padding: '8px 6px', fontSize: '11px' })}>
                   Rate Per<br />Visit / Service
                 </td>
-                <td style={{ ...cell({ fontWeight: 'bold', textAlign: 'center', width: '8%', padding: '8px 6px', fontSize: '11px' }) }}>
+                <td style={cell({ fontWeight: 'bold', textAlign: 'center', width: '8%', padding: '8px 6px', fontSize: '11px' })}>
                   Qty /<br />Services
                 </td>
-                <td style={{ ...cell({ fontWeight: 'bold', textAlign: 'center', width: '8%', padding: '8px 6px', fontSize: '11px' }) }}>
+                <td style={cell({ fontWeight: 'bold', textAlign: 'center', width: '8%', padding: '8px 6px', fontSize: '11px' })}>
                   Amount<br />Rs
                 </td>
-                <td style={{ ...cell({ fontWeight: 'bold', textAlign: 'center', width: '4%', padding: '8px 6px', fontSize: '11px' }) }}>
+                <td style={cell({ fontWeight: 'bold', textAlign: 'center', width: '4%', padding: '8px 6px', fontSize: '11px' })}>
                   Ps
                 </td>
               </tr>
@@ -869,27 +822,17 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                 const visitLabel = row.visitType || row.visits || 'Per Visit';
                 return (
                   <tr key={idx}>
-                    <td style={{ ...cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' }) }}>
-                      {idx + 1}.
-                    </td>
-                    <td style={{ ...descCell({ textAlign: 'left', verticalAlign: 'middle', padding: '8px' }) }}>
+                    <td style={cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' })}>{idx + 1}.</td>
+                    <td style={descCell({ textAlign: 'left', verticalAlign: 'middle', padding: '8px' })}>
                       {renderDescriptionWithHighlight(row)}
                     </td>
-                    <td style={{ ...cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' }) }}>
-                      {visitLabel}
-                    </td>
-                    <td style={{ ...cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' }) }}>
+                    <td style={cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' })}>{visitLabel}</td>
+                    <td style={cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' })}>
                       Rs {(parseFloat(row.rate) || 0).toLocaleString('en-IN')}/-
                     </td>
-                    <td style={{ ...cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' }) }}>
-                      {row.qty || 1}
-                    </td>
-                    <td style={{ ...cell({ textAlign: 'right', verticalAlign: 'middle', fontWeight: '600', padding: '8px 6px' }) }}>
-                      {a.rs}
-                    </td>
-                    <td style={{ ...cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' }) }}>
-                      {a.ps}
-                    </td>
+                    <td style={cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' })}>{row.qty || 1}</td>
+                    <td style={cell({ textAlign: 'right', verticalAlign: 'middle', fontWeight: '600', padding: '8px 6px' })}>{a.rs}</td>
+                    <td style={cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' })}>{a.ps}</td>
                   </tr>
                 );
               })}
@@ -897,26 +840,26 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
               {(bill.rows || []).length < 2 &&
                 Array.from({ length: 2 - (bill.rows || []).length }).map((_, i) => (
                   <tr key={`empty-${i}`}>
-                    <td style={{ ...cell({ height: '35px', padding: '8px 6px' }) }}></td>
-                    <td style={{ ...descCell({ padding: '8px' }) }}></td>
-                    <td style={{ ...cell({ padding: '8px' }) }}></td>
-                    <td style={{ ...cell({ padding: '8px' }) }}></td>
-                    <td style={{ ...cell({ padding: '8px' }) }}></td>
-                    <td style={{ ...cell({ padding: '8px' }) }}></td>
-                    <td style={{ ...cell({ padding: '8px' }) }}></td>
+                    <td style={cell({ height: '35px', padding: '8px 6px' })}></td>
+                    <td style={descCell({ padding: '8px' })}></td>
+                    <td style={cell({ padding: '8px' })}></td>
+                    <td style={cell({ padding: '8px' })}></td>
+                    <td style={cell({ padding: '8px' })}></td>
+                    <td style={cell({ padding: '8px' })}></td>
+                    <td style={cell({ padding: '8px' })}></td>
                   </tr>
                 ))}
 
               <tr>
-                <td style={{ ...cell({ padding: '8px 6px' }) }}></td>
-                <td style={{ ...descCell({ fontWeight: 'bold', color: '#dc2626', padding: '12px 8px', fontSize: '12px', textAlign: 'center' }) }}>
+                <td style={cell({ padding: '8px 6px' })}></td>
+                <td style={descCell({ fontWeight: 'bold', color: '#dc2626', padding: '12px 8px', fontSize: '12px', textAlign: 'center' })}>
                   ** Enclosed Service Vouchers
                 </td>
-                <td style={{ ...cell({ padding: '8px' }) }}></td>
-                <td style={{ ...cell({ padding: '8px' }) }}></td>
-                <td style={{ ...cell({ padding: '8px' }) }}></td>
-                <td style={{ ...cell({ padding: '8px' }) }}></td>
-                <td style={{ ...cell({ padding: '8px' }) }}></td>
+                <td style={cell({ padding: '8px' })}></td>
+                <td style={cell({ padding: '8px' })}></td>
+                <td style={cell({ padding: '8px' })}></td>
+                <td style={cell({ padding: '8px' })}></td>
+                <td style={cell({ padding: '8px' })}></td>
               </tr>
             </tbody>
 
@@ -931,55 +874,37 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                   <>
                     <tr>
                       <td
-                        style={{
-                          ...cell({
-                            textAlign: 'right',
-                            fontWeight: 'bold',
-                            background: '#f9f9f9',
-                            padding: '10px 8px',
-                            fontSize: '12px',
-                          }),
-                        }}
+                        style={cell({
+                          textAlign: 'right', fontWeight: 'bold', background: '#f9f9f9', padding: '10px 8px', fontSize: '12px',
+                        })}
                         colSpan={5}
                       >
                         TOTAL
                       </td>
-                      <td style={{ ...cell({ textAlign: 'right', fontWeight: 'bold', background: '#f9f9f9', padding: '10px 8px', fontSize: '12px' }) }}>
-                        {tot.rs}
-                      </td>
-                      <td style={{ ...cell({ textAlign: 'center', fontWeight: 'bold', background: '#f9f9f9', padding: '10px 8px' }) }}>
-                        {tot.ps}
-                      </td>
+                      <td style={cell({ textAlign: 'right', fontWeight: 'bold', background: '#f9f9f9', padding: '10px 8px', fontSize: '12px' })}>{tot.rs}</td>
+                      <td style={cell({ textAlign: 'center', fontWeight: 'bold', background: '#f9f9f9', padding: '10px 8px' })}>{tot.ps}</td>
                     </tr>
 
                     {bill.type === 'tax' ? (
                       <>
                         <tr>
-                          <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }} colSpan={5}>
+                          <td style={cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' })} colSpan={5}>
                             CGST {cgstRate}%
                           </td>
-                          <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }}>
-                            {cg.rs}
-                          </td>
-                          <td style={{ ...cell({ textAlign: 'center', background: '#fff', padding: '10px 8px' }) }}>
-                            {cg.ps}
-                          </td>
+                          <td style={cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' })}>{cg.rs}</td>
+                          <td style={cell({ textAlign: 'center', background: '#fff', padding: '10px 8px' })}>{cg.ps}</td>
                         </tr>
                         <tr>
-                          <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }} colSpan={5}>
+                          <td style={cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' })} colSpan={5}>
                             SGST {sgstRate}%
                           </td>
-                          <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }}>
-                            {sg.rs}
-                          </td>
-                          <td style={{ ...cell({ textAlign: 'center', background: '#fff', padding: '10px 8px' }) }}>
-                            {sg.ps}
-                          </td>
+                          <td style={cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' })}>{sg.rs}</td>
+                          <td style={cell({ textAlign: 'center', background: '#fff', padding: '10px 8px' })}>{sg.ps}</td>
                         </tr>
                       </>
                     ) : (
                       <tr>
-                        <td style={{ ...cell({ background: '#fff', color: '#666', fontSize: '10px', textAlign: 'center', padding: '8px' }) }} colSpan={7}>
+                        <td style={cell({ background: '#fff', color: '#666', fontSize: '10px', textAlign: 'center', padding: '8px' })} colSpan={7}>
                           (Cashless Bill — No GST Applied)
                         </td>
                       </tr>
@@ -987,25 +912,15 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
 
                     <tr>
                       <td
-                        style={{
-                          ...cell({
-                            textAlign: 'right',
-                            fontWeight: 'bold',
-                            background: '#f9f9f9',
-                            padding: '10px 8px',
-                            fontSize: '12px',
-                          }),
-                        }}
+                        style={cell({
+                          textAlign: 'right', fontWeight: 'bold', background: '#f9f9f9', padding: '10px 8px', fontSize: '12px',
+                        })}
                         colSpan={5}
                       >
                         GRAND TOTAL
                       </td>
-                      <td style={{ ...cell({ textAlign: 'right', fontWeight: 'bold', background: '#f9f9f9', padding: '10px 8px', fontSize: '12px' }) }}>
-                        {gt.rs}
-                      </td>
-                      <td style={{ ...cell({ textAlign: 'center', fontWeight: 'bold', background: '#f9f9f9', padding: '10px 8px' }) }}>
-                        {gt.ps}
-                      </td>
+                      <td style={cell({ textAlign: 'right', fontWeight: 'bold', background: '#f9f9f9', padding: '10px 8px', fontSize: '12px' })}>{gt.rs}</td>
+                      <td style={cell({ textAlign: 'center', fontWeight: 'bold', background: '#f9f9f9', padding: '10px 8px' })}>{gt.ps}</td>
                     </tr>
                   </>
                 );
@@ -1016,7 +931,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
           <table style={{ ...tbl, marginBottom: '0' }} className="avoid-break">
             <tbody>
               <tr>
-                <td style={{ ...cell({ fontWeight: 'bold', padding: '10px', fontSize: '11px' }) }}>
+                <td style={cell({ fontWeight: 'bold', padding: '10px', fontSize: '11px' })}>
                   Total Amount In Words: <span style={{ fontWeight: 'normal' }}>{amtWords} Only</span>
                 </td>
               </tr>
@@ -1027,7 +942,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
             <table style={{ ...tbl, marginBottom: '0' }} className="avoid-break">
               <tbody>
                 <tr>
-                  <td style={{ ...cell({ padding: '10px', fontSize: '11px', color: '#043a0e' }) }}>
+                  <td style={cell({ padding: '10px', fontSize: '11px', color: '#043a0e' })}>
                     <span style={{ fontWeight: 'bold' }}>Remarks:</span> {bill.remarks}
                   </td>
                 </tr>
@@ -1038,7 +953,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
           <table style={tbl} className="avoid-break">
             <tbody>
               <tr>
-                <td style={{ ...cell({ width: '60%', verticalAlign: 'top', padding: '10px' }) }}>
+                <td style={cell({ width: '60%', verticalAlign: 'top', padding: '10px' })}>
                   <div style={{ fontWeight: 'bold', marginBottom: '6px', textDecoration: 'underline', fontSize: '11px' }}>
                     Terms & Conditions
                   </div>
@@ -1048,31 +963,19 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                     </div>
                   ))}
                 </td>
-                <td style={{ ...cell({ width: '40%', textAlign: 'center', verticalAlign: 'bottom', padding: '10px' }) }}>
+                <td style={cell({ width: '40%', textAlign: 'center', verticalAlign: 'bottom', padding: '10px' })}>
                   <div style={{ fontWeight: 'bold', marginBottom: '6px', fontSize: '11px' }}>
                     For {company.name || 'Eco Pest Solutions'}
                   </div>
 
                   {(signSrc || sealSrc) && (
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
-                      <div
-                        style={{
-                          position: 'relative',
-                          display: 'inline-block',
-                          minHeight: '80px',
-                          lineHeight: 0,
-                        }}
-                      >
+                      <div style={{ position: 'relative', display: 'inline-block', minHeight: '80px', lineHeight: 0 }}>
                         {sealSrc && (
                           <img
                             src={sealSrc}
                             alt="Seal"
-                            style={{
-                              height: '90px',
-                              maxWidth: '180px',
-                              objectFit: 'contain',
-                              display: 'block',
-                            }}
+                            style={{ height: '90px', maxWidth: '180px', objectFit: 'contain', display: 'block' }}
                           />
                         )}
                         {signSrc && (
