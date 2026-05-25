@@ -386,10 +386,13 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
     const companyName = company.name || 'Eco Pest Solutions';
 
     const message =
-      `Hi! Your invoice from ${companyName}\n\n` +
-      `Bill No: ${billNumber}\n` +
+      `Dear Customer,\n\n` +
+      `Customer Email: ${customerEmail || 'No Email'}\n\n` +
+      `Please find your invoice attached.\n\n` +
+      `Bill Number: ${billNumber}\n` +
       `Total Amount: ₹${amount}\n\n` +
-      `Thank you for your business!`;
+      `Thank you for your business!\n\n` +
+      `Best regards,\n${companyName}`;
 
     setGeneratingPDF(true);
     try {
