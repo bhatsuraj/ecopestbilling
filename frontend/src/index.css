@@ -1,0 +1,354 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ===========================================================
+   BASE RESET & TYPOGRAPHY
+   =========================================================== */
+body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    line-height: 1.6;
+    transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: -0.03em;
+    font-weight: 700;
+}
+
+code {
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    font-size: 0.9em;
+}
+
+/* ===========================================================
+   SCROLLBAR & SELECTION
+   =========================================================== */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--border-soft);
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+::selection {
+    background: var(--accent-glow);
+    color: var(--text-main);
+}
+
+/* ===========================================================
+   THEME VARIABLES (Neo-Glass Aesthetic)
+   =========================================================== */
+@layer base {
+    :root {
+        /* LIGHT THEME (Frosty Pearl) */
+        --bg-main: #f8f9fa;
+        --bg-surface: rgba(255, 255, 255, 0.7);
+        --bg-surface-hover: rgba(255, 255, 255, 0.95);
+        
+        --text-main: #0f172a;
+        --text-secondary: #334155;
+        --text-muted: #64748b;
+        
+        --primary: #4338ca; /* Deep Indigo */
+        --primary-hover: #3730a3;
+        --accent-glow: rgba(67, 56, 202, 0.15);
+        
+        --border-soft: rgba(15, 23, 42, 0.08);
+        --border-strong: rgba(15, 23, 42, 0.15);
+        
+        --shadow-sm: 0 2px 8px -2px rgba(15, 23, 42, 0.05);
+        --shadow-lg: 0 12px 32px -4px rgba(15, 23, 42, 0.08);
+        
+        --glass-blur: blur(12px);
+        
+        /* Shadcn UI Overrides */
+        --background: 210 40% 98%;
+        --foreground: 222 47% 11%;
+        --card: 0 0% 100%;
+        --card-foreground: 222 47% 11%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 222 47% 11%;
+        --border: 214 32% 91%;
+        --input: 214 32% 91%;
+        --primary-fg: 210 40% 98%;
+        --radius: 1rem;
+    }
+
+    .dark {
+        /* DARK THEME (Midnight Space) */
+        --bg-main: #0a0f1c; /* Deep midnight */
+        --bg-surface: rgba(17, 24, 39, 0.6);
+        --bg-surface-hover: rgba(30, 41, 59, 0.8);
+        
+        --text-main: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-muted: #94a3b8;
+        
+        --primary: #818cf8; /* Soft Indigo */
+        --primary-hover: #6366f1;
+        --accent-glow: rgba(129, 140, 248, 0.15);
+        
+        --border-soft: rgba(255, 255, 255, 0.05);
+        --border-strong: rgba(255, 255, 255, 0.12);
+        
+        --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
+        --shadow-lg: 0 16px 40px -4px rgba(0, 0, 0, 0.5);
+
+        /* Shadcn UI Overrides */
+        --background: 222 47% 6%;
+        --foreground: 210 40% 98%;
+        --card: 222 47% 8%;
+        --card-foreground: 210 40% 98%;
+        --popover: 222 47% 8%;
+        --popover-foreground: 210 40% 98%;
+        --border: 217 32% 15%;
+        --input: 217 32% 15%;
+    }
+}
+
+/* ===========================================================
+   DARK MODE CASCADE (Overriding generic Tailwind utility classes)
+   =========================================================== */
+html.dark {
+    background-color: var(--bg-main) !important;
+    background-image: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+}
+
+html.dark body {
+    color-scheme: dark;
+    background-color: var(--bg-main) !important;
+    color: var(--text-primary);
+}
+
+/* Glassmorphic Surfaces */
+html.dark .bg-white, 
+html.dark .bg-slate-50, 
+html.dark .bg-slate-100 { 
+    background-color: var(--bg-surface) !important; 
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border-soft);
+    box-shadow: var(--shadow-sm);
+}
+
+/* ---- Alpha-variant white backgrounds widely used across the app
+   (bg-white/70, bg-white/80, bg-white/85, bg-white/90, bg-white/95, bg-white/60, etc.)
+   These bypass the simple `.bg-white` selector above because Tailwind appends a
+   numeric opacity suffix into the class name. Use an attribute selector so all
+   variants resolve to a dark surface. */
+html.dark [class*="bg-white/"],
+html.dark [class*="bg-slate-50/"],
+html.dark [class*="bg-slate-100/"] {
+    background-color: var(--bg-surface) !important;
+    backdrop-filter: var(--glass-blur);
+}
+
+/* ---- Page-level pastel gradients used as section backdrops.
+   Many modules wrap content in `bg-gradient-to-br from-slate-50 via-white to-emerald-50`
+   (or similar pastel combos). In dark mode we flatten to the midnight surface
+   so text & cards keep contrast. */
+html.dark .bg-gradient-to-br.from-slate-50,
+html.dark .bg-gradient-to-r.from-slate-50,
+html.dark .bg-gradient-to-tr.from-slate-50,
+html.dark .bg-gradient-to-bl.from-slate-50,
+html.dark .bg-gradient-to-br.from-white,
+html.dark .bg-gradient-to-r.from-white,
+html.dark .bg-gradient-to-r.from-emerald-50,
+html.dark .bg-gradient-to-r.from-cyan-50,
+html.dark .bg-gradient-to-r.from-sky-50,
+html.dark .bg-gradient-to-r.from-amber-50,
+html.dark .bg-gradient-to-r.from-violet-50,
+html.dark .bg-gradient-to-r.from-rose-50 {
+    background-image: linear-gradient(135deg, rgba(30,41,59,0.35), rgba(15,23,42,0.6)) !important;
+}
+
+/* ---- Pastel tinted backgrounds (50-shade) used for chips, table headers,
+   stat-card halos, alerts. Soften them so dark-mode text remains readable. */
+html.dark .bg-emerald-50,
+html.dark .bg-cyan-50,
+html.dark .bg-sky-50,
+html.dark .bg-amber-50,
+html.dark .bg-violet-50,
+html.dark .bg-rose-50,
+html.dark .bg-blue-50,
+html.dark .bg-green-50,
+html.dark .bg-orange-50,
+html.dark .bg-indigo-50,
+html.dark .bg-purple-50,
+html.dark .bg-pink-50,
+html.dark .bg-lime-50,
+html.dark .bg-teal-50,
+html.dark .bg-yellow-50 {
+    background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Brand-tinted utility text on dark backgrounds — keep them readable */
+html.dark .text-emerald-600, html.dark .text-emerald-700 { color: #34d399 !important; }
+html.dark .text-cyan-600,    html.dark .text-cyan-700    { color: #67e8f9 !important; }
+html.dark .text-sky-600,     html.dark .text-sky-700     { color: #7dd3fc !important; }
+html.dark .text-amber-600,   html.dark .text-amber-700   { color: #fbbf24 !important; }
+html.dark .text-rose-500,    html.dark .text-rose-600    { color: #fb7185 !important; }
+html.dark .text-violet-600,  html.dark .text-violet-700  { color: #a78bfa !important; }
+html.dark .text-orange-600,  html.dark .text-orange-700  { color: #fb923c !important; }
+
+/* Soft borders frequently used like border-white/80, border-slate-200 etc. */
+html.dark [class*="border-white/"],
+html.dark .border-slate-200,
+html.dark .border-slate-100 {
+    border-color: var(--border-strong) !important;
+}
+
+/* Divider lines (divide-slate-100, divide-slate-200) inside tables */
+html.dark [class*="divide-slate-100"] > * + *,
+html.dark [class*="divide-slate-200"] > * + * {
+    border-color: var(--border-soft) !important;
+}
+
+/* Subtle hover backdrops used on table rows: bg-emerald-50/50, bg-slate-50/50 ... */
+html.dark .hover\:bg-emerald-50\/50:hover,
+html.dark .hover\:bg-emerald-50:hover,
+html.dark .hover\:bg-sky-50:hover,
+html.dark .hover\:bg-rose-50:hover,
+html.dark .hover\:bg-slate-50:hover {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Text Adaptations */
+html.dark .text-slate-900, html.dark .text-slate-800 { color: var(--text-main) !important; }
+html.dark .text-slate-700, html.dark .text-slate-600 { color: var(--text-secondary) !important; }
+html.dark .text-slate-500, html.dark .text-slate-400 { color: var(--text-muted) !important; }
+
+/* Interactive Elements */
+html.dark .hover\:bg-slate-50:hover, 
+html.dark .hover\:bg-slate-100:hover { 
+    background-color: var(--bg-surface-hover) !important; 
+}
+
+/* Form Controls */
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(#invoice-print-area input),
+html.dark textarea:not(#invoice-print-area textarea),
+html.dark select:not(#invoice-print-area select) {
+    background-color: rgba(15, 23, 42, 0.4) !important;
+    color: var(--text-main) !important;
+    border: 1px solid var(--border-strong) !important;
+    backdrop-filter: blur(4px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html.dark input:focus, html.dark textarea:focus, html.dark select:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px var(--accent-glow) !important;
+}
+
+/* ===========================================================
+   CUSTOM UI COMPONENTS
+   =========================================================== */
+
+/* Neo-Glass Cards */
+.stat-card {
+    background: var(--bg-surface);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.stat-card:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--border-strong);
+    background: var(--bg-surface-hover);
+}
+
+/* Modern Buttons */
+.btn-primary {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 99px; /* Pill shape */
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 14px 0 var(--accent-glow);
+}
+.btn-primary:hover { 
+    background: var(--primary-hover); 
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px 0 var(--accent-glow);
+}
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* ===========================================================
+   ANIMATIONS
+   =========================================================== */
+.fade-in {
+    animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.pop-in {
+    animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes popIn {
+    0%   { opacity: 0; transform: scale(0.9) translateY(10px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ===========================================================
+   INVOICE / PRINT PROTECTION
+   =========================================================== */
+/* Keep the invoice document looking like a real piece of paper regardless of theme */
+#invoice-print-area, #invoice-print-area * {
+    color-scheme: light;
+}
+
+@media print {
+    @page {
+        size: A4;
+        margin: 0;
+    }
+    body { background: #fff !important; }
+    .no-print { display: none !important; }
+    
+    #invoice-print-area { 
+        position: absolute; 
+        left: 0; 
+        top: 0; 
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0;
+        padding: 12mm;
+        background: white !important;
+        box-shadow: none !important;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+    }
+}
+
+/* Utility to ensure tooltips/modals render correctly */
+@layer base {
+    [data-debug-wrapper="true"] { display: contents !important; }
+}
