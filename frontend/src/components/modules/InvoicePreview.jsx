@@ -945,7 +945,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
 
                   <br />
 
-                  <div style={{ fontWeight: 'bold', fontSize: '12px', color: 'red' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#000000' }}>
                     ** Enclosed Service Vouchers
                   </div>
                 </td>
