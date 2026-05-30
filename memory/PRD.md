@@ -72,18 +72,41 @@ browser DevTools → Application → Local Storage panel.
   `localStorage.eco_current_user` has no password, role-guard hides
   admin/users for Assistant.
 
+## What's been implemented — Feb 2026 (Branding + Bill numbering)
+- ✅ Reusable `CompanyLogo` component (`/app/frontend/src/components/CompanyLogo.jsx`).
+  Renders the company logo URL (defaults to `DEFAULT_COMPANY.logoUrl` from
+  `AppContext`; Sidebar passes the live `getCompanyProfile().logoUrl`).
+  Gracefully falls back to the original `Leaf` icon on `onError` or when
+  no URL is configured.
+- ✅ All static `<Leaf />` icon usages replaced with `<CompanyLogo />` in:
+  `Sidebar.jsx`, `SimpleLoginPage.jsx`, `SimpleRegisterPage.jsx`,
+  `LoginPage.jsx`, `RegisterPage.jsx`, `MagicLoginVerifyPage.jsx`,
+  `MagicLinkLoginPage.jsx`, `FirebaseTestPage.jsx`.
+- ✅ Bill numbering sequence now starts at `EPS000410`
+  (`AppContext.js → BILL_START_SEQ = 410`,
+  `next = Math.max(BILL_START_SEQ-1, ...nums) + 1`). Verified empty `bills`
+  collection → next bill = `EPS000410`.
+- ✅ My Account phone field uses `PhoneInput` with country selection
+  (matches Register page) — earlier in this session.
+- ✅ Cashless billing option fully removed — app defaults to Tax invoice.
+- ✅ AES-GCM payload encryption regression: 8/8 backend pytest pass
+  (`/app/backend/tests/test_encryption_regression.py`) covering encrypted
+  envelopes on `/api/company`, `/api/bills`, PUT round-trip, and
+  intentionally-plaintext `/api/auth/*`.
+
 ## Roadmap / Backlog
-- **P1** — Optional: AES-GCM payload obfuscation for non-sensitive
-  business data (DevTools hardening beyond data-minimization).
-- **P1** — Remove dead Firebase-based `get_current_user` in
-  `server.py` (~line 335) — only the JWT factory is now wired.
-- **P2** — Implement per-record RBAC: assistants should not be able to
-  read/modify records that belong to other users.
+- **P1** — Standardize raw `axios.*` calls across components to use the
+  interceptor-enabled `api` instance (encryption hardening).
+- **P1** — Optional `/api/auth/me` endpoint for token-validity refresh
+  (currently absent; frontend uses `localStorage.eco_current_user`).
+- **P2** — Clarify if a 3rd "Customer" role should have login access.
 - **P2** — 30-min idle auto-logout + "session expired" toast.
-- **P2** — Tighten CSP (remove `'unsafe-inline'` / `'unsafe-eval'`) once
-  the CRA bundle is reviewed / ejected.
-- **P2** — Split `server.py` (1025 lines) into routers: `auth`, `users`,
+- **P2** — Split `server.py` (~1130 lines) into routers: `auth`, `users`,
   `customers`, `bills`, `company`, `services`, `notifications`.
+- **P2** — Split `AppContext.js` (~1020 lines) into slice contexts
+  (bills, customers, company).
+- **P2** — Tighten CSP (remove `'unsafe-inline'` / `'unsafe-eval'`)
+  once the CRA bundle is reviewed.
 
 ## Key endpoints
 - `POST /api/auth/simple-login` — JWT + sanitized user
