@@ -65,7 +65,8 @@ export default function MyAccount() {
   const [form, setForm] = useState({
     name: currentUser?.name || '',
     email: currentUser?.email || '',
-    phone: currentUser?.phone || '',
+    // Always store just the 10-digit local number; +91 is a fixed display prefix.
+    phone: (currentUser?.phone || '').replace(/\D/g, '').slice(-10),
   });
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
@@ -265,16 +266,39 @@ export default function MyAccount() {
             />
 
             <div className="sm:col-span-2">
-              <Field
-                icon={Phone}
-                label="Phone"
-                type="tel"
-                testId="account-phone-input"
-                maxLength={10}
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="9876543210"
-              />
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Phone
+              </label>
+              <div className="relative flex items-stretch">
+                <Phone size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600/70" />
+                <span
+                  data-testid="account-phone-prefix"
+                  aria-label="Country code +91 (fixed)"
+                  className="select-none flex items-center rounded-l-2xl border border-r-0 border-slate-200 bg-slate-50 pl-9 pr-3 text-sm font-semibold text-slate-700"
+                >
+                  +91
+                </span>
+                <input
+                  data-testid="account-phone-input"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="\d{10}"
+                  maxLength={10}
+                  value={form.phone}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      phone: e.target.value.replace(/\D/g, '').slice(0, 10),
+                    })
+                  }
+                  onKeyDown={(e) => {
+                    // Block any attempt to backspace/delete into the +91 prefix area
+                    // (no-op here since prefix is a separate element, but kept for safety)
+                  }}
+                  placeholder="9876543210"
+                  className="w-full rounded-r-2xl border border-slate-200 bg-white/95 py-3 pl-3 pr-4 text-sm text-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.06)] outline-none transition-all placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                />
+              </div>
             </div>
           </div>
 
