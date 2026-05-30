@@ -1,0 +1,42 @@
+{
+  "summary": "Verified the JWT + RBAC security overhaul end-to-end. Backend: 35/35 pytest cases pass in /app/backend/tests/test_rbac_security.py — all 6 protected GETs return 401 without a Bearer token, all 6 return 200 with Superior JWT, all 7 Superior-only mutations (POST /api/users, PUT /api/users/{id}, DELETE /api/users/{id}, role-change, POST /api/auth/create-assistant, PUT /api/company, PUT /api/services) return 403 with Assistant JWT, all 5 read endpoints return 200 with Assistant JWT, /api/auth/simple-login returns valid 3-part JWT + sanitized user, /api/auth/magic-link/verify error body contains no secrets, and PUT /api/users/{id}/password rejects wrong current_password with 401 / accepts correct one with 200 and persists a bcrypt $2b$ hash. No response body across all 6 GETs (under Superior auth) contains any of password / password_hash / firebase_uid / resetToken / passwordResetToken / passwordResetExpiry / otp. Frontend: Superior (surajbhat2001@gmail.com) and Assistant (rohit@gmail.com) both login → /dashboard, sessionStorage.eco_auth_token holds the JWT (Superior 277 chars, Assistant 268 chars, both 3-part), localStorage.eco_current_user has keys [id,name,email,phone,role,employeeId,createdAt] with NO password field for either role. Superior can navigate /customers, /bills, /admin/users without errors. Assistant on /admin/users is redirected to /dashboard (frontend role-guard working) and the sidebar correctly hides admin/users entry — only [Dashboard, Bill Generate, Customers, Bill Summary, Verification Requests, My Account, Logout] is shown for assistant. Network inspection during the full UI session shows /api/auth/simple-login and all /api/notifications/{id} responses contain NO 'password' key. axios interceptor in AppContext.js attaches Bearer token automatically on every authenticated XHR after login.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/users/{id}/password", "issue": "Backend accepts snake_case payload keys current_password / new_password while the original review request used camelCase currentPassword / newPassword. The frontend (MyAccount.jsx:125) already uses snake_case so the integration works, but it deviates from the rest of the API's camelCase-ish style. Recommend either accepting both via Field(alias=...) or documenting the snake_case contract."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "SimpleLoginPage (/login)", "issues": ["Password input and 'Sign In' button have no data-testid — only the identifier input does. Add data-testid='login-password-input' and data-testid='login-submit-button' for stable automation."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rbac_security.py",
+    "/app/backend/tests/test_security.py",
+    "/app/test_reports/pytest/rbac_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: add data-testid to password input and Sign In button on SimpleLoginPage.jsx (only nice-to-have; current tests work).",
+    "OPTIONAL: normalise password-change payload keys (snake_case vs camelCase) — see backend minor issue above."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1125 lines — JWT + RBAC dependencies are correctly wired into every route via Depends(current_user_dep) / Depends(require_superior_dep). Consider splitting into routers for maintainability.",
+    "Two get_current_user functions still co-exist (Firebase-based legacy at line ~335 and JWT factory build_get_current_user). Only the JWT one is wired into routes; legacy Firebase one is dead code and should be removed to avoid future confusion.",
+    "/api/auth/simple-login response sends access_token and user fields at top level (flattened, not nested under 'user'); the test acceptance allowed both shapes. Frontend correctly destructures and discards access_token + token_type + password before persisting (AppContext.js:723).",
+    "sanitize_user / sanitize_users correctly strips password, password_hash, hashed_password, firebase_uid, passwordResetToken, passwordResetExpiry, _id — verified across all 6 protected GETs.",
+    "Initial unauthenticated page load fires several /api/customers, /api/users requests that get 401 'Missing bearer token' (visible as console errors before login completes). Consider gating these fetches behind the currentUser state in AppContext to keep the console clean — cosmetic only."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rbac_security.py (new — 35 pytest cases covering all 7 review-request items)"
+  ],
+  "success_rate": {"backend": "100% (35/35 pytest)", "frontend": "100% (Superior + Assistant login → dashboard, role-based UI gating, no password leak in storage or network)"},
+  "test_credentials": "Superior: surajbhat2001@gmail.com / Suraj@262001 (id=9d16db74-12b6-4dc6-bf14-585b9452948c) — Assistant: +918105004458 or rohit@gmail.com / Rohit@2026 (id=41178426-414f-4c36-9791-fcd3a2bff538).",
+  "seed_data_creation": "None — used pre-seeded users. Password-change test rotates assistant password to Rohit@2026Temp1 and restores it within the same test to keep credentials stable.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Full JWT+RBAC security overhaul is verified end-to-end. All 6 protected GETs are 401 without a token, Superior gets 200 and a clean payload (no password/firebase_uid/reset-token leaks), Assistant is 403 on every Superior-only mutation and 200 on every read. /api/auth/simple-login returns a 3-part JWT and a sanitized user. /api/users/{id}/password rejects wrong current_password with 401, accepts correct with 200, and writes a bcrypt $2b$ hash to MongoDB. Frontend: AppContext axios interceptor injects Bearer from sessionStorage.eco_auth_token, login strips password+access_token before persisting localStorage.eco_current_user. Tests live at /app/backend/tests/test_rbac_security.py (35 cases). For follow-up runs, just rerun pytest — no fixtures need re-seeding. NOTE: backend PUT /api/users/{id}/password expects snake_case (current_password / new_password), not camelCase as the review request implied.",
+  "rca of the issue": "Not a bug fix this iteration — first end-to-end verification of the JWT+RBAC hardening. The previous testing agent (iteration_1) flagged that mutation endpoints were NOT JWT-gated; that gap has now been closed by E1, and this iteration confirms via 35 pytest cases + 2-role Playwright UI walk-through that every endpoint correctly enforces auth and role, and every response is free of password/firebase_uid/reset-token fields."
+}

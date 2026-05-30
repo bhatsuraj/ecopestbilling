@@ -958,7 +958,7 @@ DEFAULT_COMPANY = {
 
 
 @api_router.get("/company", response_model=CompanyProfile)
-async def get_company_profile():
+async def get_company_profile(_user: dict = Depends(current_user_dep)):
     company = await company_collection.find_one({}, {"_id": 0})
     if not company:
         return CompanyProfile(**DEFAULT_COMPANY)
@@ -966,7 +966,10 @@ async def get_company_profile():
 
 
 @api_router.put("/company", response_model=CompanyProfile)
-async def update_company_profile(company: CompanyProfileUpdate):
+async def update_company_profile(
+    company: CompanyProfileUpdate,
+    _superior: dict = Depends(require_superior_dep),
+):
     company_dict = {k: v for k, v in company.model_dump().items() if v is not None}
     await company_collection.update_one(
         {},
@@ -981,7 +984,10 @@ async def update_company_profile(company: CompanyProfileUpdate):
 # ==================== NOTIFICATION ENDPOINTS ====================
 
 @api_router.post("/notifications", response_model=Notification)
-async def create_notification(notification: NotificationCreate):
+async def create_notification(
+    notification: NotificationCreate,
+    _user: dict = Depends(current_user_dep),
+):
     notification_dict = notification.model_dump()
     _ensure_str_id(notification_dict)
     notification_dict["userId"] = str(notification_dict.get("userId", ""))
@@ -999,13 +1005,19 @@ async def create_notification(notification: NotificationCreate):
 
 
 @api_router.get("/notifications", response_model=List[Notification])
-async def get_all_notifications():
+async def get_all_notifications(_user: dict = Depends(current_user_dep)):
     notifications = await notifications_collection.find({}, {"_id": 0}).sort("createdAt", -1).to_list(10000)
     return notifications
 
 
 @api_router.get("/notifications/{user_id}", response_model=List[Notification])
-async def get_user_notifications(user_id: str):
+async def get_user_notifications(
+    user_id: str,
+    current_user: dict = Depends(current_user_dep),
+):
+    # Users can only read their own notifications; superiors can read anyone's.
+    if str(current_user.get("id")) != str(user_id) and (current_user.get("role") or "").lower() != "superior":
+        raise HTTPException(status_code=403, detail="Forbidden")
     notifications = await notifications_collection.find(
         {"userId": user_id},
         {"_id": 0},
@@ -1014,19 +1026,30 @@ async def get_user_notifications(user_id: str):
 
 
 @api_router.put("/notifications/{notification_id}/read")
-async def mark_notification_read(notification_id: str):
-    result = await notifications_collection.update_one(
+async def mark_notification_read(
+    notification_id: str,
+    current_user: dict = Depends(current_user_dep),
+):
+    notif = await notifications_collection.find_one({"id": notification_id}, {"_id": 0})
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    if str(notif.get("userId")) != str(current_user.get("id")) and (current_user.get("role") or "").lower() != "superior":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    await notifications_collection.update_one(
         {"id": notification_id},
         {"$set": {"read": True}},
     )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Notification not found")
     notify("notifications", "update")
     return {"message": "Notification marked as read"}
 
 
 @api_router.put("/notifications/user/{user_id}/read-all")
-async def mark_all_notifications_read(user_id: str):
+async def mark_all_notifications_read(
+    user_id: str,
+    current_user: dict = Depends(current_user_dep),
+):
+    if str(current_user.get("id")) != str(user_id) and (current_user.get("role") or "").lower() != "superior":
+        raise HTTPException(status_code=403, detail="Forbidden")
     await notifications_collection.update_many(
         {"userId": user_id},
         {"$set": {"read": True}},
@@ -1036,7 +1059,12 @@ async def mark_all_notifications_read(user_id: str):
 
 
 @api_router.delete("/notifications/{user_id}")
-async def clear_user_notifications(user_id: str):
+async def clear_user_notifications(
+    user_id: str,
+    current_user: dict = Depends(current_user_dep),
+):
+    if str(current_user.get("id")) != str(user_id) and (current_user.get("role") or "").lower() != "superior":
+        raise HTTPException(status_code=403, detail="Forbidden")
     await notifications_collection.delete_many({"userId": user_id})
     notify("notifications", "delete")
     return {"message": "All notifications cleared"}
@@ -1047,13 +1075,16 @@ async def clear_user_notifications(user_id: str):
 # as one editable list, so we expose GET (list) + PUT (replace-all).
 
 @api_router.get("/services")
-async def get_services() -> List[Dict[str, Any]]:
+async def get_services(_user: dict = Depends(current_user_dep)) -> List[Dict[str, Any]]:
     services = await services_collection.find({}, {"_id": 0}).to_list(10000)
     return services
 
 
 @api_router.put("/services")
-async def replace_services(services: List[Dict[str, Any]]):
+async def replace_services(
+    services: List[Dict[str, Any]],
+    _superior: dict = Depends(require_superior_dep),
+):
     """Replace the entire services collection with the provided list."""
     await services_collection.delete_many({})
     if services:
