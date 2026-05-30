@@ -3,7 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useApp } from '../context/AppContext';
 import { t } from '../i18n/translations';
-import { Leaf, Mail, Lock, Globe, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Globe, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import CompanyLogo from '../components/CompanyLogo';
 
 const LANG_OPTIONS = [
   { code: 'en', label: 'English' },
@@ -122,8 +123,8 @@ export default function SimpleLoginPage() {
         />
         <div className="relative z-10 flex flex-col justify-center items-center text-white p-12 w-full">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center border border-white/30">
-              <Leaf size={32} className="text-white" />
+            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center border border-white/30 overflow-hidden">
+              <CompanyLogo size={32} imgClass="h-full w-full object-contain p-1.5" />
             </div>
           </div>
           <h1 className="text-4xl font-bold text-center mb-3" style={{ fontFamily: "'Outfit', sans-serif" }}>
@@ -148,8 +149,8 @@ export default function SimpleLoginPage() {
           {/* Language + Mobile logo */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-2 lg:hidden">
-              <div className="w-9 h-9 bg-green-700 rounded-xl flex items-center justify-center">
-                <Leaf size={18} className="text-white" />
+              <div className="w-9 h-9 bg-green-700 rounded-xl flex items-center justify-center overflow-hidden">
+                <CompanyLogo size={18} imgClass="h-full w-full object-contain p-0.5" />
               </div>
               <span className="font-bold text-slate-900" style={{ fontFamily: "'Outfit', sans-serif" }}>Eco Pest</span>
             </div>

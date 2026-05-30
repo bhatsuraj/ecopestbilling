@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useApp } from '../context/AppContext';
-import { Loader2, CheckCircle, XCircle, Leaf } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import CompanyLogo from '../components/CompanyLogo';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -52,8 +53,8 @@ export default function MagicLoginVerifyPage() {
       <div className="w-full max-w-md p-8">
         <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
           <div className="flex items-center justify-center mb-6">
-            <div className="w-16 h-16 bg-green-700 rounded-2xl flex items-center justify-center">
-              <Leaf size={32} className="text-white" />
+            <div className="w-16 h-16 bg-green-700 rounded-2xl flex items-center justify-center overflow-hidden">
+              <CompanyLogo size={32} imgClass="h-full w-full object-contain p-1.5" />
             </div>
           </div>
 

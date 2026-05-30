@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { t } from '../i18n/translations';
+import CompanyLogo from './CompanyLogo';
 import {
-  Leaf,
   LayoutDashboard,
   FileText,
   Users,
@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function Sidebar({ open, onClose }) {
-  const { language, logout, currentUser, isSuperior, tick, getPendingVerificationsCount } = useApp();
+  const { language, logout, currentUser, isSuperior, tick, getPendingVerificationsCount, getCompanyProfile } = useApp();
   const navigate = useNavigate();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -116,8 +116,12 @@ export default function Sidebar({ open, onClose }) {
         <div className="relative border-b border-white/10 px-5 py-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 shadow-[0_12px_30px_rgba(16,185,129,0.25)]">
-                <Leaf size={18} className="text-white" />
+              <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 shadow-[0_12px_30px_rgba(16,185,129,0.25)]">
+                <CompanyLogo
+                  logoUrl={getCompanyProfile?.()?.logoUrl}
+                  size={18}
+                  imgClass="h-full w-full object-contain p-1"
+                />
               </div>
               <div>
                 <p className="text-sm font-bold leading-tight text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>

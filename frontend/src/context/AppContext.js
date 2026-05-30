@@ -781,12 +781,13 @@ export const AppProvider = ({ children }) => {
   const isFirstUser = () => usersRef.current.length === 0;
   const getAssistants = () => usersRef.current.filter(u => u.role === 'assistant');
 
-  // ── Bill numbering — EPS000001 format ────────────────────────────────
+  // ── Bill numbering — EPS000001 format (sequence starts at EPS000410) ─
+  const BILL_START_SEQ = 410;
   const generateBillNumber = () => {
     const nums = billsRef.current
       .map(b => parseInt(String(b.billNumber || '').replace(/\D/g, ''), 10))
       .filter(n => !isNaN(n));
-    const next = nums.length ? Math.max(...nums) + 1 : 1;
+    const next = Math.max(BILL_START_SEQ - 1, ...nums) + 1;
     return `EPS${String(next).padStart(6, '0')}`;
   };
 

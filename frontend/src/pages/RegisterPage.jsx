@@ -3,7 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useApp } from '../context/AppContext';
 import { t } from '../i18n/translations';
-import { Leaf, User, Mail, Lock, Globe, Shield, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Lock, Globe, Shield, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import CompanyLogo from '../components/CompanyLogo';
 import PhoneInput, { isValidE164Phone } from '../components/ui/phone-input';
 import { isStrongPassword, PASSWORD_RULE_TEXT } from '../lib/password';
 
@@ -119,8 +120,8 @@ export default function RegisterPage() {
         <img src="https://images.unsplash.com/photo-1730320631955-fb257a118940?crop=entropy&cs=srgb&fm=jpg&q=85&w=900"
           alt="bg" className="absolute inset-0 w-full h-full object-cover opacity-25" />
         <div className="relative z-10 flex flex-col justify-center items-center text-white p-12 w-full">
-          <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center border border-white/30 mb-6">
-            <Leaf size={40} className="text-white" />
+          <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center border border-white/30 mb-6 overflow-hidden">
+            <CompanyLogo size={40} imgClass="h-full w-full object-contain p-1.5" />
           </div>
           <h1 className="text-4xl font-bold text-center mb-3" style={{ fontFamily: "'Outfit', sans-serif" }}>
             Eco Pest Solutions
@@ -138,8 +139,8 @@ export default function RegisterPage() {
         <div className="w-full max-w-md">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-2 lg:hidden">
-              <div className="w-9 h-9 bg-green-700 rounded-xl flex items-center justify-center">
-                <Leaf size={18} className="text-white" />
+              <div className="w-9 h-9 bg-green-700 rounded-xl flex items-center justify-center overflow-hidden">
+                <CompanyLogo size={18} imgClass="h-full w-full object-contain p-0.5" />
               </div>
               <span className="font-bold text-slate-900" style={{ fontFamily: "'Outfit', sans-serif" }}>Eco Pest</span>
             </div>

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { sendSignInLinkToEmail, signInWithPhoneNumber, RecaptchaVerifier } from 'firebase/auth';
 import { firebaseAuth } from '../lib/firebase';
-import { Leaf, CheckCircle, XCircle, Loader2, Smartphone, Mail } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Smartphone, Mail } from 'lucide-react';
+import CompanyLogo from '../components/CompanyLogo';
 
 export default function FirebaseTestPage() {
   const [status, setStatus] = useState({});
@@ -81,8 +82,8 @@ export default function FirebaseTestPage() {
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 bg-green-700 rounded-xl flex items-center justify-center">
-              <Leaf size={24} className="text-white" />
+            <div className="w-12 h-12 bg-green-700 rounded-xl flex items-center justify-center overflow-hidden">
+              <CompanyLogo size={24} imgClass="h-full w-full object-contain p-1" />
             </div>
             <div>
               <h1 className="text-3xl font-bold text-slate-900" style={{ fontFamily: "'Outfit', sans-serif" }}>
