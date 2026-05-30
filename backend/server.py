@@ -86,6 +86,16 @@ def _strip_user_secrets(doc):
     return {k: v for k, v in doc.items() if k not in _USER_SECRET_FIELDS}
 
 
+# ---------------------------------------------------------------------------
+# SECURITY: JWT auth + RBAC dependencies
+# `current_user_dep` rejects any request without a valid Bearer JWT.
+# `require_superior_dep` additionally rejects assistants — used to gate user
+# management, company profile edits, and the services catalogue.
+# ---------------------------------------------------------------------------
+current_user_dep = build_get_current_user(users_collection)
+require_superior_dep = build_require_superior(current_user_dep)
+
+
 # Create the main app without a prefix
 app = FastAPI()
 
@@ -409,7 +419,7 @@ async def simple_register(body: SimpleRegisterBody):
         "name": body.name,
         "email": email_norm,
         "phone": phone_norm,
-        "password": body.password,  # Plain text for now (temporary)
+        "password": hash_password(body.password),
         "role": role,
         "employeeId": employee_id,
         "firebase_uid": "",
@@ -427,12 +437,11 @@ async def simple_register(body: SimpleRegisterBody):
 
 
 @api_router.post("/auth/create-assistant")
-async def create_assistant(body: SimpleRegisterBody):
-    """Create an Assistant Admin. Used by the Superior from Admin Management.
-    
-    Requires that a Superior already exists (otherwise the very first user must
-    register via /auth/simple-register and become the Superior).
-    """
+async def create_assistant(
+    body: SimpleRegisterBody,
+    _superior: dict = Depends(require_superior_dep),
+):
+    """Create an Assistant Admin. Restricted to authenticated Superior admins."""
     superior_count = await users_collection.count_documents({"role": "superior"})
     if superior_count == 0:
         raise HTTPException(
@@ -467,7 +476,7 @@ async def create_assistant(body: SimpleRegisterBody):
         "name": body.name,
         "email": email_norm,
         "phone": phone_norm,
-        "password": body.password,
+        "password": hash_password(body.password),
         "role": "assistant",
         "employeeId": employee_id,
         "firebase_uid": "",
@@ -612,16 +621,23 @@ async def verify_magic_link(body: MagicLinkVerifyBody):
     
     logging.info(f"Magic link verified for {token_data['email']}")
     
-    return user
+    safe_user = sanitize_user(user)
+    access_token = create_access_token(user)
+    return {**safe_user, "access_token": access_token, "token_type": "bearer"}
 
 
 # ==================== USER ENDPOINTS ====================
 
 @api_router.post("/users", response_model=User)
-async def create_user(user: UserCreate):
+async def create_user(
+    user: UserCreate,
+    _superior: dict = Depends(require_superior_dep),
+):
     user_dict = user.model_dump()
     _ensure_str_id(user_dict)
     user_dict.setdefault("createdAt", datetime.now(timezone.utc).isoformat())
+    if user_dict.get("password"):
+        user_dict["password"] = hash_password(user_dict["password"])
 
     # Upsert by id so re-saving from a stale client doesn't 500.
     await users_collection.update_one(
@@ -629,19 +645,19 @@ async def create_user(user: UserCreate):
         {"$set": user_dict},
         upsert=True,
     )
-    saved = await users_collection.find_one({"id": user_dict["id"]}, {"_id": 0})
+    saved = await users_collection.find_one({"id": user_dict["id"]}, _USER_SAFE_PROJECTION)
     notify("users", "create")
-    return User(**saved)
+    return User(**sanitize_user(saved))
 
 
 @api_router.get("/users", response_model=List[User])
-async def get_users():
+async def get_users(_user: dict = Depends(current_user_dep)):
     users = await users_collection.find({}, _USER_SAFE_PROJECTION).to_list(1000)
     return sanitize_users(users)
 
 
 @api_router.get("/users/{user_id}", response_model=User)
-async def get_user(user_id: str):
+async def get_user(user_id: str, _user: dict = Depends(current_user_dep)):
     user = await users_collection.find_one({"id": user_id}, _USER_SAFE_PROJECTION)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -649,9 +665,18 @@ async def get_user(user_id: str):
 
 
 @api_router.put("/users/{user_id}", response_model=User)
-async def update_user(user_id: str, user: UserCreate):
+async def update_user(
+    user_id: str,
+    user: UserCreate,
+    _superior: dict = Depends(require_superior_dep),
+):
     user_dict = user.model_dump()
     user_dict["id"] = str(user_id)
+    # Never overwrite stored bcrypt hash with a blank/plaintext from the form.
+    if user_dict.get("password"):
+        user_dict["password"] = hash_password(user_dict["password"])
+    else:
+        user_dict.pop("password", None)
     result = await users_collection.update_one(
         {"id": user_dict["id"]},
         {"$set": user_dict},
@@ -659,13 +684,16 @@ async def update_user(user_id: str, user: UserCreate):
     )
     if result.matched_count == 0 and not result.upserted_id:
         raise HTTPException(status_code=404, detail="User not found")
-    updated_user = await users_collection.find_one({"id": user_dict["id"]}, {"_id": 0})
+    updated_user = await users_collection.find_one({"id": user_dict["id"]}, _USER_SAFE_PROJECTION)
     notify("users", "update")
-    return User(**updated_user)
+    return User(**sanitize_user(updated_user))
 
 
 @api_router.delete("/users/{user_id}")
-async def delete_user(user_id: str):
+async def delete_user(
+    user_id: str,
+    _superior: dict = Depends(require_superior_dep),
+):
     result = await users_collection.delete_one({"id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
@@ -678,8 +706,12 @@ class RoleChangeBody(BaseModel):
 
 
 @api_router.patch("/users/{user_id}/role")
-async def change_user_role(user_id: str, body: RoleChangeBody):
-    """Change a user's role. Used by Admin Management."""
+async def change_user_role(
+    user_id: str,
+    body: RoleChangeBody,
+    _superior: dict = Depends(require_superior_dep),
+):
+    """Change a user's role. Superior-only."""
     if body.role not in ("superior", "assistant"):
         raise HTTPException(status_code=400, detail="Invalid role")
     result = await users_collection.update_one(
@@ -688,9 +720,9 @@ async def change_user_role(user_id: str, body: RoleChangeBody):
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
-    updated = await users_collection.find_one({"id": str(user_id)}, {"_id": 0})
+    updated = await users_collection.find_one({"id": str(user_id)}, _USER_SAFE_PROJECTION)
     notify("users", "update")
-    return updated
+    return sanitize_user(updated)
 
 
 class PasswordChangeBody(BaseModel):
@@ -699,19 +731,35 @@ class PasswordChangeBody(BaseModel):
 
 
 @api_router.put("/users/{user_id}/password")
-async def change_user_password(user_id: str, body: PasswordChangeBody):
-    """Change the password for a user. Verifies the current password first."""
+async def change_user_password(
+    user_id: str,
+    body: PasswordChangeBody,
+    current_user: dict = Depends(current_user_dep),
+):
+    """Change a user's password.
+    
+    Authenticated users may change their OWN password (after verifying their
+    current password). Superiors may change anyone's password without
+    needing the target user's current password.
+    """
     _validate_password(body.new_password)
 
     user = await users_collection.find_one({"id": str(user_id)}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.get("password", "") != body.current_password:
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    is_self = str(current_user.get("id")) == str(user_id)
+    is_superior = (current_user.get("role") or "").lower() == "superior"
+    if not is_self and not is_superior:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    if is_self:
+        if not verify_password(body.current_password, user.get("password", "") or ""):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
 
     await users_collection.update_one(
         {"id": str(user_id)},
-        {"$set": {"password": body.new_password}},
+        {"$set": {"password": hash_password(body.new_password)}},
     )
     notify("users", "update")
     return {"message": "Password updated successfully"}
@@ -720,7 +768,10 @@ async def change_user_password(user_id: str, body: PasswordChangeBody):
 # ==================== CUSTOMER ENDPOINTS ====================
 
 @api_router.post("/customers", response_model=Customer)
-async def create_customer(customer: CustomerCreate):
+async def create_customer(
+    customer: CustomerCreate,
+    _user: dict = Depends(current_user_dep),
+):
     customer_dict = customer.model_dump()
     _ensure_str_id(customer_dict)
     customer_dict.setdefault("createdAt", datetime.now(timezone.utc).isoformat())
@@ -736,13 +787,13 @@ async def create_customer(customer: CustomerCreate):
 
 
 @api_router.get("/customers", response_model=List[Customer])
-async def get_customers():
+async def get_customers(_user: dict = Depends(current_user_dep)):
     customers = await customers_collection.find({}, {"_id": 0}).to_list(1000)
     return customers
 
 
 @api_router.get("/customers/{customer_id}", response_model=Customer)
-async def get_customer(customer_id: str):
+async def get_customer(customer_id: str, _user: dict = Depends(current_user_dep)):
     customer = await customers_collection.find_one({"id": customer_id}, {"_id": 0})
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
@@ -750,7 +801,11 @@ async def get_customer(customer_id: str):
 
 
 @api_router.put("/customers/{customer_id}", response_model=Customer)
-async def update_customer(customer_id: str, customer: CustomerCreate):
+async def update_customer(
+    customer_id: str,
+    customer: CustomerCreate,
+    _user: dict = Depends(current_user_dep),
+):
     customer_dict = customer.model_dump()
     customer_dict["id"] = str(customer_id)
     await customers_collection.update_one(
@@ -764,7 +819,10 @@ async def update_customer(customer_id: str, customer: CustomerCreate):
 
 
 @api_router.delete("/customers/{customer_id}")
-async def delete_customer(customer_id: str):
+async def delete_customer(
+    customer_id: str,
+    _user: dict = Depends(current_user_dep),
+):
     result = await customers_collection.delete_one({"id": customer_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Customer not found")
@@ -775,7 +833,7 @@ async def delete_customer(customer_id: str):
 # ==================== BILL ENDPOINTS ====================
 
 @api_router.post("/bills", response_model=Bill)
-async def create_bill(bill: BillCreate):
+async def create_bill(bill: BillCreate, _user: dict = Depends(current_user_dep)):
     bill_dict = bill.model_dump()
     _ensure_str_id(bill_dict)
     bill_dict.setdefault("createdAt", datetime.now(timezone.utc).isoformat())
@@ -792,13 +850,13 @@ async def create_bill(bill: BillCreate):
 
 
 @api_router.get("/bills", response_model=List[Bill])
-async def get_bills():
+async def get_bills(_user: dict = Depends(current_user_dep)):
     bills = await bills_collection.find({}, {"_id": 0}).to_list(10000)
     return bills
 
 
 @api_router.get("/bills/{bill_id}", response_model=Bill)
-async def get_bill(bill_id: str):
+async def get_bill(bill_id: str, _user: dict = Depends(current_user_dep)):
     bill = await bills_collection.find_one({"id": bill_id}, {"_id": 0})
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
@@ -806,7 +864,7 @@ async def get_bill(bill_id: str):
 
 
 @api_router.get("/bills/number/{bill_number}", response_model=Bill)
-async def get_bill_by_number(bill_number: str):
+async def get_bill_by_number(bill_number: str, _user: dict = Depends(current_user_dep)):
     bill = await bills_collection.find_one({"billNumber": bill_number}, {"_id": 0})
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
@@ -814,7 +872,11 @@ async def get_bill_by_number(bill_number: str):
 
 
 @api_router.put("/bills/{bill_id}", response_model=Bill)
-async def update_bill(bill_id: str, bill: BillCreate):
+async def update_bill(
+    bill_id: str,
+    bill: BillCreate,
+    _user: dict = Depends(current_user_dep),
+):
     bill_dict = bill.model_dump()
     bill_dict["id"] = str(bill_id)
     await bills_collection.update_one(
@@ -828,7 +890,11 @@ async def update_bill(bill_id: str, bill: BillCreate):
 
 
 @api_router.put("/bills/number/{bill_number}", response_model=Bill)
-async def update_bill_by_number(bill_number: str, bill: BillCreate):
+async def update_bill_by_number(
+    bill_number: str,
+    bill: BillCreate,
+    _user: dict = Depends(current_user_dep),
+):
     """Upsert by the user-facing billNumber. Used by the frontend sync layer."""
     bill_dict = bill.model_dump()
     bill_dict["billNumber"] = bill_number
@@ -850,7 +916,7 @@ async def update_bill_by_number(bill_number: str, bill: BillCreate):
 
 
 @api_router.delete("/bills/{bill_id}")
-async def delete_bill(bill_id: str):
+async def delete_bill(bill_id: str, _user: dict = Depends(current_user_dep)):
     result = await bills_collection.delete_one({"id": bill_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Bill not found")
@@ -859,7 +925,10 @@ async def delete_bill(bill_id: str):
 
 
 @api_router.delete("/bills/number/{bill_number}")
-async def delete_bill_by_number(bill_number: str):
+async def delete_bill_by_number(
+    bill_number: str,
+    _user: dict = Depends(current_user_dep),
+):
     result = await bills_collection.delete_one({"billNumber": bill_number})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Bill not found")
