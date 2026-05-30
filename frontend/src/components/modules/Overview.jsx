@@ -388,15 +388,9 @@ export default function Overview() {
                     </p>
 
                     <span
-                      className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                        bill.type === 'tax'
-                          ? 'bg-violet-50 text-violet-700'
-                          : 'bg-emerald-50 text-emerald-700'
-                      }`}
+                      className="mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-medium bg-violet-50 text-violet-700"
                     >
-                      {bill.type === 'tax'
-                        ? t(language, 'tax')
-                        : t(language, 'cashless')}
+                      {t(language, 'tax')}
                     </span>
                   </div>
                 </div>

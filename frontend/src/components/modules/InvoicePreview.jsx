@@ -269,15 +269,10 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
   let sgst = 0;
   let grandTotal = subtotal;
 
-  if (bill.type === 'tax') {
-    cgst = bill.cgst ?? (subtotal * cgstRate) / 100;
-    sgst = bill.sgst ?? (subtotal * sgstRate) / 100;
-    grandTotal = bill.grandTotal ?? bill.total ?? subtotal + cgst + sgst;
-  } else {
-    cgst = 0;
-    sgst = 0;
-    grandTotal = bill.grandTotal ?? bill.total ?? subtotal;
-  }
+  // Cashless removed: every bill is now treated as a tax invoice.
+  cgst = bill.cgst ?? (subtotal * cgstRate) / 100;
+  sgst = bill.sgst ?? (subtotal * sgstRate) / 100;
+  grandTotal = bill.grandTotal ?? bill.total ?? subtotal + cgst + sgst;
 
   const amtWords = numberToWords(Math.floor(grandTotal));
 
@@ -333,8 +328,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
 
   const buildPdfFilename = () => {
     const billNum = bill?.billNumber?.replace('BILL-', '').replace('EPS', '') || '001';
-    const billType = bill?.type === 'tax' ? 'TaxInvoice' : 'CashBill';
-    return `${billType}_${billNum}.pdf`;
+    return `TaxInvoice_${billNum}.pdf`;
   };
 
   const handlePDF = async () => {
@@ -710,7 +704,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                     }),
                   }}
                 >
-                  {bill.type === 'tax' ? 'TAX INVOICE' : 'CASH BILL'}
+                  {'TAX INVOICE'}
                 </td>
                 <td style={{ ...cell({ width: '33%', padding: '8px', border: 'none' }) }}></td>
               </tr>
@@ -952,8 +946,8 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                       </td>
                     </tr>
 
-                    {bill.type === 'tax' ? (
-                      <>
+                    {/* Tax-only invoice (cashless removed) */}
+                    <>
                         <tr>
                           <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }} colSpan={5}>
                             CGST {cgstRate}%
@@ -977,13 +971,6 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                           </td>
                         </tr>
                       </>
-                    ) : (
-                      <tr>
-                        <td style={{ ...cell({ background: '#fff', color: '#666', fontSize: '10px', textAlign: 'center', padding: '8px' }) }} colSpan={7}>
-                          (Cashless Bill — No GST Applied)
-                        </td>
-                      </tr>
-                    )}
 
                     <tr>
                       <td
@@ -1107,11 +1094,12 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                     }}
                   >
                     Authorized Signature
+                    
                   </div>
                 </td>
               </tr>
             </tbody>
-          </table>
+          </table>**This is company generated invoice and does not require Signature
         </div>
       </div>
     </div>

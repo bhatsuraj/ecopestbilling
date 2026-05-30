@@ -68,7 +68,7 @@ export default function BillGenerate() {
   }, [isEditingCancelled, navigate]);
 
   // Form state — initialized from editingBill if present
-  const [billType, setBillType]         = useState(editingBill?.type || 'cashless');
+  const [billType, setBillType]         = useState(editingBill?.type || 'tax');
   const [rows, setRows]                 = useState(() => {
     if (editingBill?.rows?.length) {
       return editingBill.rows.map(r => ({
@@ -530,15 +530,8 @@ export default function BillGenerate() {
         </div>
       </div>
 
-      {/* Bill Type */}
-      <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit">
-        {[['cashless', 'cashlessBill'], ['tax', 'taxBill']].map(([type, key]) => (
-          <button key={type} data-testid={`${type}-bill-tab`} onClick={() => setBillType(type)}
-            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${billType === type ? 'bg-white shadow text-emerald-700' : 'text-slate-600 hover:text-slate-800'}`}>
-            {t(language, key)}
-          </button>
-        ))}
-      </div>
+      {/* Bill Type — Tax only (Cashless removed) */}
+
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-4">
@@ -858,7 +851,7 @@ export default function BillGenerate() {
         <div className="space-y-4">
           <div className="rounded-[30px] border border-white/80 bg-white/85 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur-xl sticky top-4">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
-              {billType === 'tax' ? 'Tax Summary' : 'Bill Summary'}
+              Tax Summary
             </p>
             <div className="space-y-2">
               <div className="flex justify-between items-center py-2 border-b border-slate-100">
@@ -907,7 +900,7 @@ export default function BillGenerate() {
             )}
 
             <p className="mt-3 text-center text-xs text-slate-400">
-              {rows.length} service row{rows.length !== 1 ? 's' : ''} · {billType === 'tax' ? `${cgstRate + sgstRate}% GST` : 'No tax'}
+              {rows.length} service row{rows.length !== 1 ? 's' : ''} · {cgstRate + sgstRate}% GST
             </p>
           </div>
         </div>

@@ -510,7 +510,6 @@ export default function BillSummary() {
               className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none transition-all focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
             >
               <option value="">{t(language, 'allTypes')}</option>
-              <option value="cashless">{t(language, 'cashless')}</option>
               <option value="tax">{t(language, 'tax')}</option>
             </select>
 
