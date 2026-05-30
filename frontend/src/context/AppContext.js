@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { isEncryptedPayload, decryptPayload } from '../lib/payloadCrypto';
 
 // ---------------------------------------------------------------------------
 // API client — single base URL pulled from .env. All persistence flows through
@@ -29,6 +30,30 @@ api.interceptors.request.use((config) => {
   if (t) config.headers.Authorization = `Bearer ${t}`;
   return config;
 });
+// Decrypt AES-GCM-encrypted response bodies in-place so callers receive
+// plain JS objects while DevTools Network still shows only ciphertext.
+async function decryptResponseInPlace(response) {
+  if (response && isEncryptedPayload(response.data)) {
+    try {
+      response.data = await decryptPayload(response.data);
+    } catch (err) {
+      // Surface the error to the caller — do not silently hand back ciphertext.
+      // eslint-disable-next-line no-console
+      console.error('Payload decryption failed', err);
+      throw err;
+    }
+  }
+  return response;
+}
+api.interceptors.response.use(
+  (r) => decryptResponseInPlace(r),
+  async (error) => {
+    if (error?.response) {
+      try { await decryptResponseInPlace(error.response); } catch { /* ignore */ }
+    }
+    return Promise.reject(error);
+  },
+);
 // Same interceptor for the bare `axios` instance (some legacy callers
 // use `axios` directly with a full URL — keep them authenticated too).
 axios.interceptors.request.use((config) => {
@@ -39,6 +64,15 @@ axios.interceptors.request.use((config) => {
   }
   return config;
 });
+axios.interceptors.response.use(
+  (r) => decryptResponseInPlace(r),
+  async (error) => {
+    if (error?.response) {
+      try { await decryptResponseInPlace(error.response); } catch { /* ignore */ }
+    }
+    return Promise.reject(error);
+  },
+);
 
 export const DEFAULT_COMPANY = {
   name: 'ECO PEST SOLUTIONS',

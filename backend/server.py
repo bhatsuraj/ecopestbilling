@@ -1112,6 +1112,13 @@ app.add_middleware(
 # OWASP security response headers (HSTS, CSP, X-Frame-Options, etc.)
 app.add_middleware(SecurityHeadersMiddleware)
 
+# AES-GCM response payload obfuscation — must be registered LAST so it
+# runs FIRST on the response (Starlette middleware stack is LIFO on
+# response). This ensures the body is encrypted *after* CORS / security
+# headers are written and before it leaves the process.
+from payload_middleware import PayloadEncryptionMiddleware  # noqa: E402
+app.add_middleware(PayloadEncryptionMiddleware)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
