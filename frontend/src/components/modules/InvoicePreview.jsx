@@ -304,7 +304,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
         filename: buildPdfFilename(),
         image: { type: 'jpeg', quality: 1 },
         html2canvas: {
-          scale: 2, 
+          scale: 2,
           useCORS: true,
           allowTaint: true,
           logging: false,
@@ -409,7 +409,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
           await navigator.clipboard.write([new ClipboardItem({ 'application/pdf': file })]);
           clipboardOk = true;
         }
-      } catch (_) {}
+      } catch (_) { }
 
       if (!clipboardOk) downloadPdfLocally(file);
 
@@ -532,9 +532,8 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
           onClick={handleEdit}
           disabled={isCancelled}
           title={isCancelled ? 'Cancelled invoices cannot be edited' : 'Edit invoice'}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold shadow-lg transition-colors ${
-            isCancelled ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60' : 'bg-amber-500 text-white hover:bg-amber-600'
-          }`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold shadow-lg transition-colors ${isCancelled ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60' : 'bg-amber-500 text-white hover:bg-amber-600'
+            }`}
         >
           <Pencil size={15} /> Edit
         </button>
@@ -551,9 +550,8 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                   : 'Share is enabled only after the approval request is approved'
                 : 'Share invoice'
             }
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold shadow-lg transition-colors ${
-              shareDisabled ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-70' : 'bg-blue-600 text-white hover:bg-blue-700'
-            } disabled:opacity-60`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold shadow-lg transition-colors ${shareDisabled ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-70' : 'bg-blue-600 text-white hover:bg-blue-700'
+              } disabled:opacity-60`}
           >
             <Share2 size={15} /> {generatingPDF ? 'Preparing...' : 'Share'}
           </button>
@@ -866,9 +864,33 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                     <td style={{ ...cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' }) }}>
                       {idx + 1}.
                     </td>
-                    <td style={{ ...descCell({ textAlign: 'left', verticalAlign: 'middle', padding: '8px' }) }}>
+                    {/* <td style={{ ...descCell({ textAlign: 'left', verticalAlign: 'middle', padding: '8px' }) }}>
                       {renderDescriptionWithHighlight(row)}
-                    </td>
+                    </td> */}
+
+                    <td
+  style={{
+    ...descCell({
+      textAlign: 'left',
+      verticalAlign: 'middle',
+      padding: '8px'
+    })
+  }}
+>
+  {renderDescriptionWithHighlight(row)}{' '}
+  <span
+    style={{
+      color: '#dc2626',
+      fontWeight: 'bold'
+    }}
+  >
+    In the month of{' '}
+    {new Date().toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric'
+    }).toUpperCase()}.
+  </span>
+</td>  
                     <td style={{ ...cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' }) }}>
                       {visitLabel}
                     </td>
@@ -900,12 +922,31 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                     <td style={{ ...cell({ padding: '8px' }) }}></td>
                   </tr>
                 ))}
-
               <tr>
                 <td style={{ ...cell({ padding: '8px 6px' }) }}></td>
-                <td style={{ ...descCell({ fontWeight: 'bold', color: '#dc2626', padding: '12px 8px', fontSize: '12px', textAlign: 'center' }) }}>
-                  ** Enclosed Service Vouchers
+
+                <td
+                  style={{
+                    ...descCell({
+                      padding: '12px 8px',
+                      textAlign: 'center',
+                      fontWeight: 'bold',
+                      fontSize: '12px',
+                      color: 'darkgreen'
+                    })
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold', fontSize: '12px', color: 'red' }}>
+                    Remarks: {bill.remarks}
+                  </div>
+
+                  <br />
+
+                  <div style={{ fontWeight: 'bold', fontSize: '12px', color: 'red' }}>
+                    ** Enclosed Service Vouchers
+                  </div>
                 </td>
+
                 <td style={{ ...cell({ padding: '8px' }) }}></td>
                 <td style={{ ...cell({ padding: '8px' }) }}></td>
                 <td style={{ ...cell({ padding: '8px' }) }}></td>
@@ -948,29 +989,29 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
 
                     {/* Tax-only invoice (cashless removed) */}
                     <>
-                        <tr>
-                          <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }} colSpan={5}>
-                            CGST {cgstRate}%
-                          </td>
-                          <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }}>
-                            {cg.rs}
-                          </td>
-                          <td style={{ ...cell({ textAlign: 'center', background: '#fff', padding: '10px 8px' }) }}>
-                            {cg.ps}
-                          </td>
-                        </tr>
-                        <tr>
-                          <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }} colSpan={5}>
-                            SGST {sgstRate}%
-                          </td>
-                          <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }}>
-                            {sg.rs}
-                          </td>
-                          <td style={{ ...cell({ textAlign: 'center', background: '#fff', padding: '10px 8px' }) }}>
-                            {sg.ps}
-                          </td>
-                        </tr>
-                      </>
+                      <tr>
+                        <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }} colSpan={5}>
+                          CGST {cgstRate}%
+                        </td>
+                        <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }}>
+                          {cg.rs}
+                        </td>
+                        <td style={{ ...cell({ textAlign: 'center', background: '#fff', padding: '10px 8px' }) }}>
+                          {cg.ps}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }} colSpan={5}>
+                          SGST {sgstRate}%
+                        </td>
+                        <td style={{ ...cell({ textAlign: 'right', background: '#fff', padding: '10px 8px', fontSize: '11px' }) }}>
+                          {sg.rs}
+                        </td>
+                        <td style={{ ...cell({ textAlign: 'center', background: '#fff', padding: '10px 8px' }) }}>
+                          {sg.ps}
+                        </td>
+                      </tr>
+                    </>
 
                     <tr>
                       <td
@@ -1010,7 +1051,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
             </tbody>
           </table>
 
-          {bill.remarks && bill.remarks.trim() && (
+          {/* {bill.remarks && bill.remarks.trim() && (
             <table style={{ ...tbl, marginBottom: '0' }} className="avoid-break">
               <tbody>
                 <tr>
@@ -1020,7 +1061,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                 </tr>
               </tbody>
             </table>
-          )}
+          )} */}
 
           <table style={tbl} className="avoid-break">
             <tbody>
@@ -1036,8 +1077,8 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                   ))}
                 </td>
                 <td style={{ ...cell({ width: '40%', textAlign: 'center', verticalAlign: 'bottom', padding: '10px' }) }}>
-                  <div style={{  marginBottom: '6px', fontSize: '11px' }}>
-                   {company.name || 'Eco Pest Solutions'}
+                  <div style={{ marginBottom: '6px', fontSize: '11px' }}>
+                    {company.name || 'Eco Pest Solutions'}
                   </div>
 
                   {(signSrc || sealSrc) && (
@@ -1094,7 +1135,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                     }}
                   >
                     Authorized Signature
-                    
+
                   </div>
                 </td>
               </tr>
