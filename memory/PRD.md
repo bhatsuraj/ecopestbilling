@@ -49,24 +49,37 @@ browser DevTools → Application → Local Storage panel.
   (13 cases, all green) covering the headers, the leak, the JWT shape,
   the bcrypt migration, and the wrong-password path.
 
+## What's been implemented — Feb 2026 (P0 + P1 closure)
+- ✅ JWT `Depends(current_user_dep)` wired into **every** protected route:
+  `/api/users`, `/api/customers`, `/api/bills`, `/api/services`,
+  `/api/company`, `/api/notifications`. All return **401** without a
+  Bearer token.
+- ✅ `Depends(require_superior_dep)` enforced on Superior-only mutations:
+  `POST/PUT/DELETE /api/users`, role-change, create-assistant,
+  `PUT /api/company`, `PUT /api/services`. All return **403** for
+  Assistants.
+- ✅ Per-user authorization on notifications: a user can only read /
+  mark-read / clear their own notifications (Superior bypasses).
+- ✅ `PUT /api/users/{id}/password` uses bcrypt verify + bcrypt hash
+  (rejects wrong current password with 401).
+- ✅ `/api/auth/magic-link/verify` response sanitized — no password,
+  reset-token, or firebase_uid leaks.
+
 ## Verification (Feb 2026)
-- Backend pytest: 13/13 pass.
-- Frontend Playwright smoke: login → dashboard → XHR bears JWT →
-  logout clears both stores. No `password` substring in any response or
-  in any browser storage.
+- Backend pytest: **35/35 pass** (`/app/backend/tests/test_rbac_security.py`).
+- Frontend Playwright (Superior + Assistant): login → dashboard →
+  customers/bills/admin all load, axios Bearer interceptor works,
+  `localStorage.eco_current_user` has no password, role-guard hides
+  admin/users for Assistant.
 
 ## Roadmap / Backlog
-- **P1** — Wire `build_get_current_user(users_collection)` into mutation
-  endpoints (`/api/customers`, `/api/bills`, `/api/users` PUT/DELETE,
-  `/api/notifications`, `/api/company`, `/api/services`) via FastAPI
-  `Depends`. The JWT is currently issued, attached, and accepted, but the
-  backend does not yet enforce it on writes. Flagged by the testing agent
-  as the remaining open security gap.
-- **P1** — Pick one canonical `get_current_user`. There are currently two
-  in the codebase (Firebase-based in `server.py:335` and JWT-based via
-  `security.build_get_current_user`). Future devs will pick the wrong one.
-- **P2** — Implement strict RBAC: assistants should not be able to
+- **P1** — Optional: AES-GCM payload obfuscation for non-sensitive
+  business data (DevTools hardening beyond data-minimization).
+- **P1** — Remove dead Firebase-based `get_current_user` in
+  `server.py` (~line 335) — only the JWT factory is now wired.
+- **P2** — Implement per-record RBAC: assistants should not be able to
   read/modify records that belong to other users.
+- **P2** — 30-min idle auto-logout + "session expired" toast.
 - **P2** — Tighten CSP (remove `'unsafe-inline'` / `'unsafe-eval'`) once
   the CRA bundle is reviewed / ejected.
 - **P2** — Split `server.py` (1025 lines) into routers: `auth`, `users`,
