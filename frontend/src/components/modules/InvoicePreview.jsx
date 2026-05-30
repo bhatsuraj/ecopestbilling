@@ -868,29 +868,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                       {renderDescriptionWithHighlight(row)}
                     </td> */}
 
-                    <td
-  style={{
-    ...descCell({
-      textAlign: 'left',
-      verticalAlign: 'middle',
-      padding: '8px'
-    })
-  }}
->
-  {renderDescriptionWithHighlight(row)}{' '}
-  <span
-    style={{
-      color: '#dc2626',
-      fontWeight: 'bold'
-    }}
-  >
-    In the month of{' '}
-    {new Date().toLocaleDateString('en-US', {
-      month: 'long',
-      year: 'numeric'
-    }).toUpperCase()}.
-  </span>
-</td>  
+                    
                     <td style={{ ...cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' }) }}>
                       {visitLabel}
                     </td>
