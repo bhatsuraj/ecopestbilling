@@ -23,6 +23,17 @@ from models import (
     Notification, NotificationCreate,
 )
 from firebase_helper import init_firebase, verify_id_token
+from security import (
+    sanitize_user,
+    sanitize_users,
+    hash_password,
+    verify_password,
+    is_legacy_password,
+    create_access_token,
+    build_get_current_user,
+    build_require_superior,
+    SecurityHeadersMiddleware,
+)
 
 
 ROOT_DIR = Path(__file__).parent
@@ -40,6 +51,40 @@ bills_collection = db['bills']
 company_collection = db['company']
 notifications_collection = db['notifications']
 services_collection = db['services']
+
+# ---------------------------------------------------------------------------
+# SECURITY: User-projection helpers
+# Every read that returns a user (or list of users) to the API MUST go
+# through these so password / firebase_uid / reset tokens never leave the
+# server in any response body. Centralising this prevents drift between
+# endpoints.
+# ---------------------------------------------------------------------------
+_USER_SAFE_PROJECTION = {
+    "_id": 0,
+    "password": 0,
+    "firebase_uid": 0,
+    "passwordResetToken": 0,
+    "passwordResetExpiry": 0,
+}
+
+_USER_SECRET_FIELDS = (
+    "password",
+    "firebase_uid",
+    "passwordResetToken",
+    "passwordResetExpiry",
+    "_id",
+)
+
+
+def _strip_user_secrets(doc):
+    """Defense-in-depth: even if a caller forgot the projection, this
+    removes secret fields before serialising the user back to the client."""
+    if not doc:
+        return doc
+    if isinstance(doc, list):
+        return [_strip_user_secrets(x) for x in doc]
+    return {k: v for k, v in doc.items() if k not in _USER_SECRET_FIELDS}
+
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -254,7 +299,9 @@ async def firebase_login(body: FirebaseLoginBody):
             updates["phone"] = phone
         await users_collection.update_one({"id": existing["id"]}, {"$set": updates})
         existing.update(updates)
-        return existing
+        safe = sanitize_user(existing)
+        token = create_access_token(existing)
+        return {**safe, "access_token": token, "token_type": "bearer"}
 
     # 3. First-time user → create a new MongoDB record
     # Check if this is the FIRST USER EVER (becomes superior admin)
@@ -463,12 +510,25 @@ async def simple_login(body: SimpleLoginBody):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    if user.get("password") != body.password:
+    stored_pw = user.get("password", "") or ""
+    if not verify_password(body.password, stored_pw):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Auto-migrate legacy plaintext passwords → bcrypt on successful login.
+    if is_legacy_password(stored_pw):
+        try:
+            await users_collection.update_one(
+                {"id": user["id"]},
+                {"$set": {"password": hash_password(body.password)}},
+            )
+        except Exception as exc:  # noqa: BLE001
+            logging.warning("Password rehash failed for %s: %s", identifier, exc)
 
     logging.info(f"Simple auth: User {identifier} logged in successfully")
 
-    return user
+    safe_user = sanitize_user(user)
+    token = create_access_token(user)
+    return {**safe_user, "access_token": token, "token_type": "bearer"}
 
 
 # ---------------------------------------------------------------------------
@@ -576,16 +636,16 @@ async def create_user(user: UserCreate):
 
 @api_router.get("/users", response_model=List[User])
 async def get_users():
-    users = await users_collection.find({}, {"_id": 0}).to_list(1000)
-    return users
+    users = await users_collection.find({}, _USER_SAFE_PROJECTION).to_list(1000)
+    return sanitize_users(users)
 
 
 @api_router.get("/users/{user_id}", response_model=User)
 async def get_user(user_id: str):
-    user = await users_collection.find_one({"id": user_id}, {"_id": 0})
+    user = await users_collection.find_one({"id": user_id}, _USER_SAFE_PROJECTION)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return sanitize_user(user)
 
 
 @api_router.put("/users/{user_id}", response_model=User)
@@ -948,6 +1008,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# OWASP security response headers (HSTS, CSP, X-Frame-Options, etc.)
+app.add_middleware(SecurityHeadersMiddleware)
 
 logging.basicConfig(
     level=logging.INFO,

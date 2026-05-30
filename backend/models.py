@@ -11,6 +11,10 @@ from datetime import datetime
 
 
 # User Models
+# SECURITY: `password` is intentionally OMITTED from the public User response
+# model so password hashes/plaintext can never leak through any
+# `response_model=User` route. The write-side `UserCreate` still accepts a
+# password (which the server hashes before storing).
 class User(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -18,7 +22,6 @@ class User(BaseModel):
     name: str
     email: str
     phone: Optional[str] = ""
-    password: Optional[str] = ""
     role: str  # 'superior' or 'assistant'
     employeeId: Optional[str] = ""
     createdAt: str

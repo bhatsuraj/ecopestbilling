@@ -10,6 +10,36 @@ import { toast } from 'sonner';
 const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const api = axios.create({ baseURL: API_BASE, timeout: 30000 });
 
+// ── Bearer token plumbing ───────────────────────────────────────────────
+// Token is held in sessionStorage (NOT localStorage) + an in-memory ref so
+// it's automatically scoped to the tab and never appears alongside the
+// user record. An axios interceptor attaches it to every outbound request.
+const TOKEN_KEY = 'eco_auth_token';
+const getStoredToken = () => {
+  try { return sessionStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; }
+};
+const setStoredToken = (token) => {
+  try {
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch { /* ignore quota / privacy-mode errors */ }
+};
+api.interceptors.request.use((config) => {
+  const t = getStoredToken();
+  if (t) config.headers.Authorization = `Bearer ${t}`;
+  return config;
+});
+// Same interceptor for the bare `axios` instance (some legacy callers
+// use `axios` directly with a full URL — keep them authenticated too).
+axios.interceptors.request.use((config) => {
+  const t = getStoredToken();
+  if (t && !config.headers?.Authorization) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${t}`;
+  }
+  return config;
+});
+
 export const DEFAULT_COMPANY = {
   name: 'ECO PEST SOLUTIONS',
   gstNumber: '29DYSPM4565D2ZS',
@@ -685,18 +715,30 @@ export const AppProvider = ({ children }) => {
   };
 
   // ── Auth (session-only via localStorage; user records live in MongoDB) ──
-  const login  = (user) => {
+  const login  = (payload) => {
+    // Separate the JWT from the user record. The token lives in
+    // sessionStorage; the user record (without password / token) lives in
+    // localStorage as before so the existing UX (remember-me, role gates)
+    // is preserved.
+    const { access_token, token_type, password, ...user } = payload || {};
+    if (access_token) setStoredToken(access_token);
     setCurrentUser(user);
     localStorage.setItem('eco_current_user', JSON.stringify(user));
   };
-  const logout = () => { setCurrentUser(null); localStorage.removeItem('eco_current_user'); };
+  const logout = () => {
+    setCurrentUser(null);
+    setStoredToken('');
+    localStorage.removeItem('eco_current_user');
+  };
 
   const updateCurrentUser = (updates) => {
-    const updated = { ...currentUser, ...updates };
+    // Never let a stray password / token field re-enter local storage.
+    const { password, access_token, token_type, ...clean } = updates || {};
+    const updated = { ...currentUser, ...clean };
     setCurrentUser(updated);
     localStorage.setItem('eco_current_user', JSON.stringify(updated));
     const list = usersRef.current;
-    saveUsers(list.map(u => String(u.id) === String(updated.id) ? { ...u, ...updates } : u));
+    saveUsers(list.map(u => String(u.id) === String(updated.id) ? { ...u, ...clean } : u));
   };
 
   // ── Role helpers ──────────────────────────────────────────────────────

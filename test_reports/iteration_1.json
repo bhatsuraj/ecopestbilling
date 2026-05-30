@@ -1,0 +1,40 @@
+{
+  "summary": "Verified the 11-point security hardening for Eco Pest Solutions billing app. Backend: 13/13 pytest cases pass — /api/users returns 200 with NO password field anywhere, security response headers (HSTS, X-Frame-Options, X-Content-Type-Options, CSP, Referrer-Policy, Permissions-Policy) are present, /api/auth/simple-login returns valid JWT and sanitized user for both admin (email + phone) and assistant (phone), wrong password returns generic 401 with no disclosure, and the MongoDB stored password starts with $2b$ confirming bcrypt migration. Subsequent admin logins succeed (bcrypt verify path works). Frontend smoke: login → /dashboard succeeds, localStorage 'eco_current_user' contains only [id,name,email,phone,role,employeeId,createdAt] with NO password/access_token/token_type, sessionStorage 'eco_auth_token' holds a 3-part JWT (len=277), post-login XHR (/api/notifications/<id>) carries 'Authorization: Bearer <jwt>' automatically via axios interceptor, and confirmed logout clears BOTH localStorage and sessionStorage and redirects to /login. P0 fix verified — no plaintext password leaks anywhere.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "CRUD endpoints (/api/customers, /api/bills, /api/users PUT/DELETE etc.)", "issue": "Currently NOT gated by JWT auth — no Depends(get_current_user) wired into mutation routes. server.py defines a Firebase-based get_current_user at line 335 but it isn't applied to any endpoint, and the security.py-based build_get_current_user(users_collection) factory is imported but never instantiated/used. Anyone with the public URL can POST/PUT/DELETE without a bearer token. The review checklist item 'token-protected mutation endpoint succeeds with header, rejected without' cannot currently be validated against a real protected route. (Documented in test_unauthenticated_mutation_status which intentionally does not assert 401.)"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_security.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (not blocking P0): wire build_get_current_user(users_collection) into mutation endpoints (customers/bills/users/notifications/company/services) via Depends, so the JWT issued by /auth/simple-login actually enforces access control. Right now the bearer token is issued, stored, attached to every XHR, and accepted, but the backend ignores it — frontend cannot detect tampered/expired sessions server-side.",
+    "OPTIONAL: tighten CSP — currently includes 'unsafe-inline' and 'unsafe-eval' in script-src; acceptable for a CRA build, but worth revisiting if the bundle is ejected."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1025 lines — consider splitting auth, users, customers, bills, company, services into separate routers for maintainability.",
+    "Two get_current_user functions exist (one Firebase-based in server.py:335, one JWT-based produced by security.build_get_current_user) — only one should be canonical, otherwise future devs will pick the wrong one.",
+    "sanitize_user correctly strips password/password_hash/hashed_password/firebase_uid/passwordResetToken/passwordResetExpiry and _id — verified in /api/users response.",
+    "Login response includes access_token at top level; AppContext.login strips it before persisting user — verified that localStorage never sees the token.",
+    "SecurityHeadersMiddleware is registered at server.py:1013 with sensible defaults (HSTS 1y, X-Frame DENY, CSP frame-ancestors none) — verified headers appear on real responses."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security.py (new — 13 pytest cases)",
+    "/app/backend/tests/__init__.py (new — empty package marker)"
+  ],
+  "success_rate": {"backend": "100% (13/13 pytest)", "frontend": "100% (login → dashboard → bearer-on-XHR → logout clears both stores)"},
+  "test_credentials": "Admin: surajbhat2001@gmail.com / +918746919550 / Suraj@262001 — Assistant: +918105004458 / Rohit@2026 (file /app/memory/test_credentials.md is sparse — does not list actual email/phone identifiers, only passwords).",
+  "seed_data_creation": "None — used pre-existing DB users.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend security hardening verified end-to-end. /api/users response is clean of password fields, JWT auth works, bcrypt migration works, security headers all present. Frontend properly partitions JWT (sessionStorage) from user record (localStorage), axios interceptor auto-attaches Bearer header on subsequent XHRs, and confirmed logout fully clears both stores. The ONLY soft gap (already reported) is that the server does not yet require the JWT on mutation endpoints — they are still publicly accessible. This is outside the scope of P0 plaintext-leak fix but worth flagging. Test file lives at /app/backend/tests/test_security.py.",
+  "rca of the issue": "Pre-existing P0 (plaintext password leak via /api/users and login response): fixed by E1 by adding sanitize_user/sanitize_users on /api/users routes and stripping access_token/password in AppContext.login before localStorage write. Verified via raw text scan of GET /api/users response (no '\"password\"' substring) and via JSON key recursion. No fixes required by this testing agent."
+}
