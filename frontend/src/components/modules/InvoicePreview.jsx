@@ -1036,8 +1036,8 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                   ))}
                 </td>
                 <td style={{ ...cell({ width: '40%', textAlign: 'center', verticalAlign: 'bottom', padding: '10px' }) }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '6px', fontSize: '11px' }}>
-                    For {company.name || 'Eco Pest Solutions'}
+                  <div style={{  marginBottom: '6px', fontSize: '11px' }}>
+                   {company.name || 'Eco Pest Solutions'}
                   </div>
 
                   {(signSrc || sealSrc) && (
@@ -1099,7 +1099,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                 </td>
               </tr>
             </tbody>
-          </table>**This is company generated invoice and does not require Signature
+          </table>**This is a computer-generated invoice and does not require a signature.
         </div>
       </div>
     </div>
