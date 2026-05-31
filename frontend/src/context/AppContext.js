@@ -266,6 +266,18 @@ export const AppProvider = ({ children }) => {
     return () => { cancelled = true; };
   }, [currentUser?.id]);
 
+  // ── Refetch all data once the user logs in ──────────────────────────────
+  // The initial /users /customers /bills /services /company fetch runs on
+  // app mount BEFORE the user has a token, so every request returns 401 and
+  // the dashboard shows zeros. Trigger a fresh fetch the moment a userId
+  // appears so the dashboard hydrates immediately after login / page refresh
+  // with a valid session.
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    refreshAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]);
+
   // ── Live sync: keep every tab / device in lock-step with MongoDB ───────
   // Strategy:
   //   1. Polling every 5 s (paused while the tab is hidden) — covers other
