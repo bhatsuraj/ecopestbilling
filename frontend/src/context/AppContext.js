@@ -62,6 +62,15 @@ api.interceptors.response.use(
   (r) => decryptResponseInPlace(r),
   async (error) => {
     if (error?.response) {
+      // Auto-purge stale credentials on 401 so the app drops back to /login
+      // instead of looping on failed authenticated calls.
+      if (error.response.status === 401) {
+        try {
+          localStorage.removeItem(TOKEN_KEY);
+          sessionStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem('eco_current_user');
+        } catch { /* ignore */ }
+      }
       try { await decryptResponseInPlace(error.response); } catch { /* ignore */ }
     }
     return Promise.reject(error);
@@ -191,7 +200,22 @@ export const AppProvider = ({ children }) => {
   useEffect(() => { notificationsByUser; notifsRef.current = notificationsByUser; }, [notificationsByUser]);
 
   const [currentUser, setCurrentUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('eco_current_user')); } catch { return null; }
+    try {
+      const user = JSON.parse(localStorage.getItem('eco_current_user'));
+      // Guard against stale sessions: if a user record exists from a previous
+      // build (when tokens lived in sessionStorage and were wiped on browser
+      // close), force a clean logout so the next API call doesn't 401.
+      const token = (
+        localStorage.getItem(TOKEN_KEY) ||
+        sessionStorage.getItem(TOKEN_KEY) ||
+        ''
+      );
+      if (user && !token) {
+        localStorage.removeItem('eco_current_user');
+        return null;
+      }
+      return user;
+    } catch { return null; }
   });
   const [language, setLanguage] = useState(() => {
     const saved = localStorage.getItem('eco_language');
