@@ -12,17 +12,30 @@ const API_BASE = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const api = axios.create({ baseURL: API_BASE, timeout: 30000 });
 
 // ── Bearer token plumbing ───────────────────────────────────────────────
-// Token is held in sessionStorage (NOT localStorage) + an in-memory ref so
-// it's automatically scoped to the tab and never appears alongside the
-// user record. An axios interceptor attaches it to every outbound request.
+// Token is held in localStorage so the session survives a browser/tab close
+// (matches where the user record is persisted). An axios interceptor
+// attaches it to every outbound request.
 const TOKEN_KEY = 'eco_auth_token';
 const getStoredToken = () => {
-  try { return sessionStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; }
+  try {
+    // Read from localStorage first; fall back to legacy sessionStorage so
+    // existing logged-in tabs keep working after the migration.
+    return (
+      localStorage.getItem(TOKEN_KEY) ||
+      sessionStorage.getItem(TOKEN_KEY) ||
+      ''
+    );
+  } catch { return ''; }
 };
 const setStoredToken = (token) => {
   try {
-    if (token) sessionStorage.setItem(TOKEN_KEY, token);
-    else sessionStorage.removeItem(TOKEN_KEY);
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+      sessionStorage.removeItem(TOKEN_KEY);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
+    }
   } catch { /* ignore quota / privacy-mode errors */ }
 };
 api.interceptors.request.use((config) => {
