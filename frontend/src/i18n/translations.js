@@ -43,7 +43,7 @@ const translations = {
     manualEntry: 'Manual Entry', enterCustomerName: 'Enter Customer Name',
     enterCustomerPhone: 'Enter Phone', enterCustomerAddress: 'Enter Address',
     notes: 'Notes', requestNotes: 'Additional Notes',
-    welcomeBack: 'Welcome back,', employeeId: 'Employee ID',
+    welcomeBack: 'Welcome', employeeId: 'Employee ID',
     todaysBills: "Today's Bills", thisMonth: 'This Month',
     overview: 'Overview', recentBills: 'Recent Bills',
     cashless: 'Tax', tax: 'Tax',

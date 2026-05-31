@@ -6,6 +6,8 @@ import { t } from '../../i18n/translations';
 import { Plus, Trash2, Eye, ShieldCheck, X, ArrowLeft, Check, Search, ChevronDown } from 'lucide-react';
 import InvoicePreview from './InvoicePreview';
 
+const SERVICES_STORAGE_KEY = 'billgenerate_services_v1';
+
 const VISIT_TYPES = [
   { value: 'Per Visit',   key: 'perVisit'   },
   { value: 'Per Month',   key: 'perMonth'   },
@@ -20,14 +22,17 @@ const newRow = (defaults = {}) => ({
   descriptionTemplate: '',   // template with {LOCATION} placeholder
   location: '',              // row-specific location
   visitType: 'Per Visit',
-  rate: 1500,
+  rate: 0,
   qty: 1,
   ...defaults,
 });
 
 // Amount = rate × qty (visitType is just a label, not a multiplier)
+// Blank rows should stay at zero so the bill total is zero until a service is chosen.
 const calcAmount = (row) =>
-  (parseFloat(row.rate) || 0) * (parseFloat(row.qty) || 0);
+  row.selectedService
+    ? (parseFloat(row.rate) || 0) * (parseFloat(row.qty) || 0)
+    : 0;
 
 const splitRsPs = (n) => {
   const v = parseFloat(n) || 0;
@@ -35,6 +40,20 @@ const splitRsPs = (n) => {
     rs: Math.floor(v).toLocaleString('en-IN'),
     ps: String(Math.round((v - Math.floor(v)) * 100)).padStart(2, '0'),
   };
+};
+
+const getServiceRate = (service) => {
+  if (!service) return 0;
+
+  const raw =
+    service?.rate ??
+    service?.defaultRate ??
+    service?.serviceRate ??
+    service?.price ??
+    service?.amount;
+
+  const parsed = parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : 1500;
 };
 
 export default function BillGenerate() {
@@ -78,7 +97,7 @@ export default function BillGenerate() {
         descriptionTemplate: r.descriptionTemplate || '',
         location:            r.location            || '',
         visitType:           r.visitType           || (typeof r.visits === 'string' ? r.visits : 'Per Visit'),
-        rate:                r.rate                || 1500,
+        rate:                r.rate ?? 0,
         qty:                 r.qty                 || 1,
       }));
     }
@@ -146,6 +165,49 @@ export default function BillGenerate() {
   const locationOptions = getLocations();
   const cgstRate  = parseFloat(company.cgst) || 0;
   const sgstRate  = parseFloat(company.sgst) || 0;
+
+  // Keep custom services persisted across refreshes and browser restarts.
+  // This merges any saved list in localStorage with the current app state once,
+  // then writes back whenever the services list changes.
+  const servicesHydratedRef = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(SERVICES_STORAGE_KEY);
+      if (raw) {
+        const stored = JSON.parse(raw);
+        if (Array.isArray(stored) && stored.length) {
+          const merged = [...services];
+          stored.forEach(svc => {
+            const exists = merged.some(existing =>
+              String(existing.id) === String(svc.id) ||
+              String(existing.name || '').trim().toLowerCase() === String(svc.name || '').trim().toLowerCase()
+            );
+            if (!exists) merged.push(svc);
+          });
+          const changed = merged.length !== services.length ||
+            merged.some((svc, idx) => JSON.stringify(svc) !== JSON.stringify(services[idx]));
+          if (changed) {
+            servicesHydratedRef.current = true;
+            saveServices(merged);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to hydrate services from storage:', err);
+    }
+    servicesHydratedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // hydrate once
+
+  useEffect(() => {
+    if (!servicesHydratedRef.current) return;
+    try {
+      window.localStorage.setItem(SERVICES_STORAGE_KEY, JSON.stringify(services));
+    } catch (err) {
+      console.warn('Failed to persist services to storage:', err);
+    }
+  }, [services]);
 
   // Substitute {LOCATION} placeholder in a template with the chosen location (or <Location> placeholder if empty)
   const renderDescription = (template, location) => {
@@ -224,11 +286,24 @@ export default function BillGenerate() {
   // Selecting a saved service auto-fills its description template & rate (still editable).
   const handleServiceSelect = (id, serviceName) => {
     if (!serviceName) {
-      updateRow(id, 'selectedService', '');
+      setRows(prev => prev.map(row => (
+        row.id !== id
+          ? row
+          : {
+              ...row,
+              selectedService: '',
+              description: '',
+              descriptionTemplate: '',
+              rate: 0,
+            }
+      )));
       return;
     }
+
     const svc = services.find(s => s.name === serviceName);
     const tpl = svc?.descriptionTemplate || svc?.description || serviceName;
+    const serviceRate = getServiceRate(svc);
+
     setRows(prev => prev.map(row => {
       if (row.id !== id) return row;
       // If the row has no override, fall back to the bill-level location so the cascade still applies.
@@ -240,7 +315,7 @@ export default function BillGenerate() {
         location:            effectiveLoc,
         description:         renderDescription(tpl, effectiveLoc),
         descriptionEdited:   false, // fresh service → description is template-generated again
-        rate:                svc?.rate ?? svc?.defaultRate ?? row.rate ?? 1500,
+        rate:                serviceRate,
       };
     }));
   };
@@ -483,7 +558,7 @@ export default function BillGenerate() {
       name: newService.name.trim(),
       description: desc,
       descriptionTemplate: desc,  // enable {LOCATION} substitution for custom services
-      rate: parseFloat(newService.rate) || 1500,
+      rate: getServiceRate(newService),
     };
     saveServices([...services, svc]);
     setNewService({ name: '', description: '', rate: 1500 });
@@ -953,7 +1028,7 @@ export default function BillGenerate() {
                   <div key={s.id} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 transition-colors">
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-900 text-sm truncate">{s.name}</p>
-                      <p className="text-xs text-slate-500 truncate">₹{s.rate} · {s.descriptionTemplate?.slice(0, 50) || s.description?.slice(0, 50) || ''}...</p>
+                      <p className="text-xs text-slate-500 truncate">₹{getServiceRate(s).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · {s.descriptionTemplate?.slice(0, 50) || s.description?.slice(0, 50) || ''}...</p>
                     </div>
                     <button data-testid={`delete-service-${s.id}`}
                       onClick={() => setConfirmDeleteService({ id: s.id, name: s.name })}

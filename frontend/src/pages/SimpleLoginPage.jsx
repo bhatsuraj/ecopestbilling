@@ -168,7 +168,7 @@ export default function SimpleLoginPage() {
 
           <div className="fade-in">
             <h2 className="text-3xl font-bold text-slate-900 mb-1" style={{ fontFamily: "'Outfit', sans-serif" }}>
-              Welcome Back
+              Welcome 
             </h2>
             <p className="text-slate-500 mb-6 text-sm">Sign in to your billing account</p>
 

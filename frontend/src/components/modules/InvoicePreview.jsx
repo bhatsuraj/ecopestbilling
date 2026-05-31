@@ -231,6 +231,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company.logoUrl]);
 
   useEffect(() => {
@@ -245,6 +246,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company.signUrl]);
 
   useEffect(() => {
@@ -259,6 +261,7 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company.sealUrl]);
 
   const subtotal = bill.subtotal ?? (bill.rows || []).reduce((s, r) => s + calcAmount(r), 0);
@@ -869,31 +872,31 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                     </td> */}
 
                     <td
-  style={{
-    ...descCell({
-      textAlign: 'left',
-      verticalAlign: 'middle',
-      padding: '8px'
-    })
-  }}
->
-  {renderDescriptionWithHighlight(row)}{' '}
- <span
-  style={{
-    color: '#dc2626',
-    fontWeight: 'bold'
-  }}
->
-  In the month of{" "}
-  {new Date(bill.date)
-    .toLocaleDateString("en-US", {
-      month: "long",
-      year: "numeric",
-    })
-    .toUpperCase()}
-  .
-</span>
-</td>
+                      style={{
+                        ...descCell({
+                          textAlign: 'left',
+                          verticalAlign: 'middle',
+                          padding: '8px'
+                        })
+                      }}
+                    >
+                      {renderDescriptionWithHighlight(row)}{' '}
+                      <span
+                        style={{
+                          color: '#dc2626',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        In the month of{" "}
+                        {new Date(bill.date)
+                          .toLocaleDateString("en-US", {
+                            month: "long",
+                            year: "numeric",
+                          })
+                          .toUpperCase()}
+                        .
+                      </span>
+                    </td>
                     <td style={{ ...cell({ textAlign: 'center', verticalAlign: 'middle', padding: '8px 6px' }) }}>
                       {visitLabel}
                     </td>
@@ -939,15 +942,31 @@ export default function InvoicePreview({ bill, onClose, onEdit, language, autoSh
                     })
                   }}
                 >
-                  <div style={{ fontWeight: 'bold', fontSize: '12px', color: 'red' }}>
-                    Remarks: {bill.remarks}
-                  </div>
+               {bill.remarks && bill.remarks.trim() && (
+  <>
+    <div
+      style={{
+        fontWeight: 'bold',
+        fontSize: '12px',
+        color: 'red'
+      }}
+    >
+      Remarks: {bill.remarks}
+    </div>
 
-                  <br />
+    <br />
+  </>
+)}
 
-                  <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#000000' }}>
-                    ** Enclosed Service Vouchers
-                  </div>
+<div
+  style={{
+    fontWeight: 'bold',
+    fontSize: '12px',
+    color: '#000000'
+  }}
+>
+  ** Enclosed Service Vouchers
+</div>
                 </td>
 
                 <td style={{ ...cell({ padding: '8px' }) }}></td>

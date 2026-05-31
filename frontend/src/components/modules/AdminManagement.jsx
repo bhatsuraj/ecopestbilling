@@ -29,10 +29,32 @@ import { isStrongPassword, PASSWORD_RULE_TEXT } from '../../lib/password';
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const emptyForm = { name: '', email: '', phone: '', password: '', role: 'assistant' };
+const PASSWORD_CACHE_KEY = 'admin_credentials_password_cache_v1';
+
+const readPasswordCache = () => {
+  try {
+    if (typeof window === 'undefined') return {};
+    const raw = window.localStorage.getItem(PASSWORD_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const writePasswordCache = (cache) => {
+  try {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(PASSWORD_CACHE_KEY, JSON.stringify(cache || {}));
+  } catch {
+    // Ignore storage failures (private browsing, quota, etc.).
+  }
+};
 
 // Build a credentials PDF for one or more users using jsPDF. Plain-text,
 // single-column layout. Persists nothing.
-const generateCredentialsPdf = async (users, fileName) => {
+// Build a credentials PDF for one or more users using jsPDF. Plain-text,
+// single-column layout. Persists nothing.
+const generateCredentialsPdf = async (users, fileName, passwordLookup = {}) => {
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
 
@@ -60,6 +82,13 @@ const generateCredentialsPdf = async (users, fileName) => {
       y = 18;
     }
 
+    const resolvedPassword =
+      u.password ||
+      passwordLookup?.[u.employeeId] ||
+      passwordLookup?.[u.email] ||
+      passwordLookup?.[u.id] ||
+      '—';
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.text(`${i + 1}. ${u.name || '—'}`, 14, y);
@@ -73,7 +102,7 @@ const generateCredentialsPdf = async (users, fileName) => {
       `Role        : ${u.role === 'superior' ? 'Superior Admin' : 'Assistant Admin'}`,
       `Email       : ${u.email || '—'}`,
       `Phone       : ${u.phone || '—'}`,
-      `Password    : ${u.password || '—'}`,
+      `Password    : ${resolvedPassword}`,
     ];
 
     lines.forEach((line) => {
@@ -155,6 +184,7 @@ export default function AdminManagement() {
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [lastCreated, setLastCreated] = useState(null);
+  const [passwordCache, setPasswordCache] = useState(() => readPasswordCache());
 
   useEffect(() => {
     loadUsers();
@@ -164,6 +194,17 @@ export default function AdminManagement() {
     try {
       const { data } = await axios.get(`${API}/users`);
       setUsers(data);
+
+      // Preserve any known plaintext passwords that were created in this browser
+      // session so they can appear in the "Download All" PDF.
+      setPasswordCache((prev) => {
+        const next = { ...(prev || {}) };
+        (data || []).forEach((u) => {
+          if (u?.password) next[u.employeeId || u.email || u.id] = u.password;
+        });
+        writePasswordCache(next);
+        return next;
+      });
     } catch (e) {
       console.error('Failed to load users:', e);
     } finally {
@@ -243,13 +284,23 @@ export default function AdminManagement() {
       setSuccess(
         `Assistant ${form.name} (${data.employeeId}) added successfully! They can now login with email: ${emailLc}`
       );
-      setLastCreated({
+      const newUser = {
         name: form.name.trim(),
         email: emailLc,
         phone: form.phone.trim(),
         password: form.password,
         employeeId: data.employeeId,
         role: 'assistant',
+      };
+
+      setLastCreated(newUser);
+      setPasswordCache((prev) => {
+        const next = {
+          ...(prev || {}),
+          [newUser.employeeId || newUser.email || newUser.name]: newUser.password,
+        };
+        writePasswordCache(next);
+        return next;
       });
       setShowModal(false);
       setForm(emptyForm);
@@ -266,7 +317,8 @@ export default function AdminManagement() {
     try {
       await generateCredentialsPdf(
         [lastCreated],
-        `Credentials_${lastCreated.employeeId}_${lastCreated.name.replace(/\s+/g, '_')}.pdf`
+        `Credentials_${lastCreated.employeeId}_${lastCreated.name.replace(/\s+/g, '_')}.pdf`,
+        passwordCache
       );
     } catch (e) {
       await notify({
@@ -280,7 +332,16 @@ export default function AdminManagement() {
   const handleDownloadAllCredentials = async () => {
     if (!users.length) return;
     try {
-      await generateCredentialsPdf(users, `EcoPest_All_Credentials_${Date.now()}.pdf`);
+      const usersWithPasswords = users.map((u) => ({
+        ...u,
+        password: u.password || passwordCache[u.employeeId] || passwordCache[u.email] || passwordCache[u.id] || '',
+      }));
+
+      await generateCredentialsPdf(
+        usersWithPasswords,
+        `EcoPest_All_Credentials_${Date.now()}.pdf`,
+        passwordCache
+      );
     } catch (e) {
       await notify({
         title: 'Download failed',
